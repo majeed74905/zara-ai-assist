@@ -1,5 +1,3 @@
-
-// ... imports ... (keep existing imports)
 import { 
   GoogleGenAI, 
   GenerateContentResponse, 
@@ -17,7 +15,6 @@ import { memoryService } from "./memoryService";
 // Helper to init AI - STRICTLY use process.env.API_KEY
 export const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// ... (Keep SAFETY_SETTINGS, HELPLINE_MESSAGE, formatHistory as is) ...
 const SAFETY_SETTINGS = [
   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
   { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -50,7 +47,6 @@ const formatHistory = (messages: Message[]): Content[] => {
   }).filter(content => content.parts.length > 0); 
 };
 
-// ... (Keep TOOLS: MEDIA_PLAYER_TOOL, SAVE_MEMORY_TOOL as is) ...
 export const MEDIA_PLAYER_TOOL: FunctionDeclaration = {
   name: "play_media",
   description: "Plays music, videos, or podcasts. Use this when the user asks to listen to a song, watch a video, or play media.",
@@ -126,11 +122,15 @@ You are a social chameleon. You must INSTANTLY detect the user's tone and mirror
 - Be proactive. If they say "Play that trend song", do it immediately.
 
 ====================================================================
-## 4. VISUALIZATION & DIAGRAMS
+## 4. VISUALIZATION & DIAGRAMS (STRICT MERMAID RULES)
 ====================================================================
-If the user asks for a diagram, flowchart, visualization, syntax tree, or visual explanation:
+If the user asks for a diagram, flowchart, visualization, or visual explanation:
 - **ACTION**: Generate a **MERMAID.JS** code block.
-- **SYNTAX RULES**: Wrap in \`\`\`mermaid ... \`\`\`. Use \`flowchart TD\` or \`flowchart LR\`.
+- **SYNTAX RULES (CRITICAL)**: 
+  1. Wrap node labels in DOUBLE QUOTES to avoid parsing errors with special characters (e.g., \`A["Process (Start)"]\`).
+  2. Use correct edge labeling: \`A -->|Label Text| B\`.
+  3. Never use characters like \`{\`, \`}\`, \`(\`, \`)\`, or \`[\` inside a label unless the entire label is quoted.
+  4. Example: \`graph TD; A["Start"] --> B{"Is Valid?"}; B -- "Yes" --> C["Success"];\`
 
 ====================================================================
 ## 5. RESPONSE STYLE
@@ -177,58 +177,14 @@ Your code runs in a specific browser sandbox. You MUST follow these rules to avo
     *   Do not use external CSS files unless generated in the \`styles.css\` block.
 
 **INTERACTION PROTOCOL**:
-1.  **ANALYZE FIRST**: If the user says "Hi" or gives a vague prompt, DO NOT generate code. Ask clarifying questions.
+1.  **ANALYZE FIRST**: If the user says "Hi" or gives a prompt, DO NOT generate code. Ask clarifying questions.
 2.  **GENERATE ONLY ON REQUEST**: Only output XML code blocks when the user explicitly asks to build or modify an app.
-
-**OUTPUT FORMAT (XML)**:
-Provide exactly 3 files. Do not use markdown fences inside the XML content.
-
-<file path="index.html">
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>App</title>
-</head>
-<body class="bg-gray-950 text-white h-screen w-full overflow-hidden">
-    <div id="root" class="h-full w-full"></div>
-</body>
-</html>
-</file>
-
-<file path="styles.css">
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-.animate-fade-in { animation: fadeIn 0.5s ease-out; }
-</file>
-
-<file path="script.js">
-// 1. SETUP GLOBALS
-const { useState, useEffect, useRef } = React;
-const { createRoot } = ReactDOM;
-const { Camera, Home, Settings, User, Bell, Plus } = lucide;
-
-// 2. COMPONENTS
-const App = () => {
-  return (
-    <div className="h-full flex items-center justify-center bg-gray-900 text-white">
-       <h1 className="text-4xl font-bold text-blue-500 animate-fade-in">Hello World</h1>
-    </div>
-  );
-};
-
-// 3. MOUNT
-const root = createRoot(document.getElementById('root'));
-root.render(<App />);
-</file>
 `;
 
 export const buildSystemInstruction = (personalization?: PersonalizationConfig, activePersona?: Persona): string => {
-  // ... (keep implementation as is)
   const now = new Date();
   const timeContext = `Current System Time: ${now.toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'medium' })}`;
   
-  // Inject Long Term Memory
   const memoryContext = memoryService.getContextString();
   const memoryBlock = memoryContext ? `\n\n**USER MEMORY CONTEXT (FACTS YOU KNOW):**\n${memoryContext}\n` : "";
 
@@ -260,35 +216,47 @@ export const buildSystemInstruction = (personalization?: PersonalizationConfig, 
     if (personalization.customInstructions) instruction += `\n**CUSTOM PREFERENCES:**\n${personalization.customInstructions}\n`;
   }
 
-  // Add Audio-Specific Instructions for clarity
-  instruction += `\n\n**LIVE AUDIO INSTRUCTIONS (OVERRIDE):**
-  - **LOUDNESS**: Speak at 100% Volume. Energetic and clear.
-  - **LANGUAGE**: If User speaks **Tamil/Tanglish**, YOU MUST SPEAK **TANGLISH** (e.g. "Haan nanba, sollu", "Supera irukku").
-  - **STYLE**: Be extremely casual and friendly. Use words like "Nanba", "Machi", "Bro", "Dude".
-  - **LISTEN**: The user is speaking via microphone. If audio is faint, assume they are speaking normally and try to process it.`;
-
   return instruction;
 };
 
-export const extractMediaAction = (text: string): { cleanText: string, mediaAction: MediaAction | null } => {
-  const jsonRegex = /```json\s*([\s\S]*?)\s*```/;
-  const match = text.match(jsonRegex);
-  
-  if (match && match[1]) {
-    try {
-      const json = JSON.parse(match[1]);
-      if (json.action === 'PLAY_MEDIA') {
-        const cleanText = text.replace(jsonRegex, '').trim();
-        return { cleanText, mediaAction: json as MediaAction };
-      }
-    } catch (e) {
-      console.error("Failed to parse Media JSON", e);
+export const analyzeGithubRepo = async (url: string, mode: 'overview' | 'implementation'): Promise<string> => {
+  const ai = getAI();
+  const prompt = mode === 'overview'
+    ? `Analyze the GitHub repository at ${url}.
+       Provide a comprehensive professional overview including:
+       1. **PURPOSE**: Explain the project's core mission and problem it solves.
+       2. **TECH STACK**: Categorize and list specific technologies:
+          - **Frontend**: Frameworks, UI kits, state management.
+          - **Backend**: Runtimes, frameworks, API architecture.
+          - **Database**: Engines, ORMs, caching layers.
+          - **DevOps**: CI/CD, containerization, cloud infrastructure.
+       3. **KEY FEATURES**: List the top 5 standout capabilities.
+       4. **ARCHITECTURE**: High-level design description (MVC, Microservices, Monolith, etc.).
+       5. **VISUAL DIRECTORY STRUCTURE**: Provide a high-quality ASCII tree (\`src/\`, \`components/\`, etc.) using icons like 📂 and 📄. Highlight crucial logic entry points.
+       6. **SYSTEM ARCHITECTURE DIAGRAM**: Generate a detailed Mermaid.js flowchart (\`\`\`mermaid flowchart TD ... \`\`\`) illustrating the main system components and their interactions.
+          **STRICT MERMAID SYNTAX RULES**:
+          - Wrap EVERY node label in double quotes: \`A["Label Name"]\`.
+          - Use correct edge syntax: \`A -->|Link Text| B\`.
+          - Do not use special characters in node IDs (use simple letters A, B, C).
+       Format the response in clean Markdown.`
+    : `Based on the GitHub repository at ${url}, provide a detailed Full-Stack Implementation Guide.
+       1. **DIRECTORY MAPPING**: Map specific features to file paths.
+       2. **CORE LOGIC**: Extract and explain the most critical business logic snippets.
+       3. **DATA MODEL**: Provide code examples of schemas or data structures.
+       4. **IMPLEMENTATION FLOW**: Explain the end-to-end flow of data through the system.
+       Use Mermaid charts if they help explain logic flows, following strict quoting rules for labels.`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-pro-preview', // Use Pro for better complex reasoning and grounding
+    contents: prompt,
+    config: {
+      tools: [{ googleSearch: {} }],
+      systemInstruction: "You are Zara Architect, an elite Senior Software Engineer. You excel at reverse-engineering repositories and presenting findings with extreme visual clarity and technical precision."
     }
-  }
-  return { cleanText: text, mediaAction: null };
+  });
+  return response.text || "Analysis failed.";
 };
 
-// ... (Rest of existing functions like sendMessageToGeminiStream, sendAppBuilderStream, generateStudentContent, generateCodeAssist, generateImageContent, generateVideo, analyzeVideo, generateSpeech, getBreakingNews, generateFlashcards, generateStudyPlan, generateExamQuestions, evaluateTheoryAnswers as is) ...
 export const sendMessageToGeminiStream = async (
   history: Message[],
   newMessage: string,
@@ -315,7 +283,6 @@ export const sendMessageToGeminiStream = async (
 
   const contents: Content[] = [...formattedHistory, { role: Role.USER, parts: currentParts }];
 
-  // Model Selection Logic
   const model = config.model || 'gemini-2.5-flash';
   
   let requestConfig: any = {
@@ -324,19 +291,14 @@ export const sendMessageToGeminiStream = async (
   };
 
   if (config.useThinking) {
-    if (model.includes('lite')) {
-        console.warn("Thinking Config disabled for Flash Lite.");
-    } else {
-        const budget = model.includes('pro') ? 32768 : 8192; 
-        requestConfig['thinkingConfig'] = { thinkingBudget: budget };
-    }
+    const budget = model.includes('pro') ? 32768 : 8192; 
+    requestConfig['thinkingConfig'] = { thinkingBudget: budget };
   }
 
   if (config.useGrounding) {
     requestConfig['tools'] = [{ googleSearch: {} }];
   }
   
-  // Add Tools
   if (!requestConfig['tools']) requestConfig['tools'] = [];
   requestConfig['tools'].push({ functionDeclarations: [MEDIA_PLAYER_TOOL, SAVE_MEMORY_TOOL] });
 
@@ -356,14 +318,11 @@ export const sendMessageToGeminiStream = async (
         onUpdate(fullText);
       }
       
-      // Handle Tool Calls (specifically Memory)
       const functionCalls = chunk.functionCalls;
       if (functionCalls) {
         for (const call of functionCalls) {
           if (call.name === 'save_memory') {
-             // Execute Memory Save locally
              const args: any = call.args;
-             console.log("Saving Memory:", args);
              memoryService.addMemory(args.content, args.category, args.tags);
           }
         }
@@ -563,11 +522,9 @@ export const generateVideo = async (
    const ai = getAI();
    
    if (images && images.length > 1) {
-      if (images.length > 3) throw new Error("Maximum 3 images allowed for slideshows.");
-      
       const referenceImagesPayload: any[] = images.map(img => ({
          image: { imageBytes: img.base64, mimeType: img.mimeType },
-         referenceType: 'ASSET', // Use string literal to avoid import issue
+         referenceType: 'ASSET', 
       }));
 
       let operation = await ai.models.generateVideos({
@@ -598,7 +555,6 @@ export const generateVideo = async (
       };
       
       let operation;
-      
       if (images && images.length === 1) {
          operation = await ai.models.generateVideos({
             model: 'veo-3.1-fast-generate-preview',
@@ -621,7 +577,6 @@ export const generateVideo = async (
 
       const uri = operation.response?.generatedVideos?.[0]?.video?.uri;
       if (!uri) throw new Error("Video generation failed");
-      
       return `${uri}&key=${process.env.API_KEY}`;
    }
 };
@@ -644,7 +599,7 @@ export const generateSpeech = async (text: string, voiceName: string): Promise<s
   const ai = getAI();
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-preview-tts',
-    contents: [{ parts: [{ text }] }], // Wraps in array for compliance
+    contents: [{ parts: [{ text }] }], 
     config: {
       responseModalities: [Modality.AUDIO],
       speechConfig: {
@@ -656,10 +611,7 @@ export const generateSpeech = async (text: string, voiceName: string): Promise<s
   });
 
   const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  if (!audioData) {
-      console.warn("No audio data returned. Model might have returned text/safety block.");
-      throw new Error("No audio generated. Please try again or check prompt.");
-  }
+  if (!audioData) throw new Error("No audio generated.");
   return audioData;
 };
 
@@ -667,10 +619,8 @@ export const getBreakingNews = async (): Promise<{ text: string, sources: Source
   const ai = getAI();
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
-    contents: "What are the top 5 breaking news headlines right now? Format each headline as a short markdown card with a summary.",
-    config: {
-      tools: [{ googleSearch: {} }]
-    }
+    contents: "What are the top 5 breaking news headlines right now? Format as Markdown cards with '---' separators.",
+    config: { tools: [{ googleSearch: {} }] }
   });
   
   const sources: Source[] = [];
@@ -683,8 +633,7 @@ export const getBreakingNews = async (): Promise<{ text: string, sources: Source
 
 export const generateFlashcards = async (topic: string, context: string): Promise<Flashcard[]> => {
   const ai = getAI();
-  const prompt = `Create 5 flashcards for "${topic}" based on this context: "${context}". Return valid JSON array with objects having 'front' and 'back' properties.`;
-  
+  const prompt = `Create 5 flashcards for "${topic}". Return JSON array with 'front' and 'back'. Context: ${context}`;
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: prompt,
@@ -694,27 +643,22 @@ export const generateFlashcards = async (topic: string, context: string): Promis
         type: Type.ARRAY,
         items: {
           type: Type.OBJECT,
-          properties: {
-            front: { type: Type.STRING },
-            back: { type: Type.STRING }
-          }
+          properties: { front: { type: Type.STRING }, back: { type: Type.STRING } }
         }
       }
     }
   });
-
   return JSON.parse(response.text || '[]');
 };
 
 export const generateStudyPlan = async (topic: string, hours: number): Promise<StudyPlan> => {
    const ai = getAI();
-   const prompt = `Create a 5-day study plan for "${topic}" with ${hours} hours per day. Return valid JSON.`;
+   const prompt = `Create a study plan for "${topic}" (${hours}h/day). Return JSON.`;
    const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
       config: { responseMimeType: 'application/json' }
    });
-   
    const raw = JSON.parse(response.text || '{}');
    return {
      id: crypto.randomUUID(),
@@ -727,81 +671,22 @@ export const generateStudyPlan = async (topic: string, hours: number): Promise<S
 
 export const generateExamQuestions = async (config: ExamConfig): Promise<ExamQuestion[]> => {
   const ai = getAI();
-  const prompt = `Generate ${config.questionCount} questions for a ${config.examType} on "${config.subject}". Difficulty: ${config.difficulty}. Language: ${config.language}. Include ${config.includeTheory ? 'both MCQ and Theory' : 'only MCQ'} questions. For MCQs, provide 4 options. For Theory, set options to null.`;
-  
+  const prompt = `Generate ${config.questionCount} questions for a ${config.examType} on "${config.subject}". Return JSON.`;
   const response = await ai.models.generateContent({
      model: 'gemini-2.5-flash',
      contents: prompt,
-     config: { 
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.INTEGER },
-              type: { type: Type.STRING, enum: ['MCQ', 'SHORT', 'LONG'] },
-              text: { type: Type.STRING },
-              options: { type: Type.ARRAY, items: { type: Type.STRING } },
-              correctAnswer: { type: Type.STRING },
-              marks: { type: Type.INTEGER }
-            },
-            required: ['id', 'type', 'text', 'correctAnswer', 'marks']
-          }
-        }
-     }
+     config: { responseMimeType: 'application/json' }
   });
-  
   return JSON.parse(response.text || '[]');
 };
 
 export const evaluateTheoryAnswers = async (subject: string, question: ExamQuestion, answer: string): Promise<{ score: number, feedback: string }> => {
    const ai = getAI();
-   const prompt = `Evaluate this answer for the question: "${question.text}" (Marks: ${question.marks}). Subject: ${subject}. User Answer: "${answer}". Return JSON with 'score' (number) and 'feedback' (string).`;
-   
+   const prompt = `Evaluate: Q: "${question.text}", A: "${answer}". Max: ${question.marks}. Return JSON with 'score' and 'feedback'.`;
    const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
-      config: { 
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            score: { type: Type.INTEGER },
-            feedback: { type: Type.STRING }
-          },
-          required: ['score', 'feedback']
-        }
-      }
+      config: { responseMimeType: 'application/json' }
    });
-   
-   return JSON.parse(response.text || '{ "score": 0, "feedback": "Error evaluating" }');
-};
-
-export const analyzeGithubRepo = async (url: string, mode: 'overview' | 'implementation'): Promise<string> => {
-  const ai = getAI();
-  const prompt = mode === 'overview'
-    ? `Analyze the GitHub repository at ${url}.
-       Provide a comprehensive professional overview including:
-       1. Purpose of the project.
-       2. Tech Stack (Frontend, Backend, Database, DevOps).
-       3. Key Features.
-       4. Architecture description.
-       Format the response in clean Markdown.`
-    : `Based on the GitHub repository at ${url}, provide a detailed Full-Stack Implementation Guide.
-       1. Extract the core business logic.
-       2. Provide code examples for the data model (e.g., SQL/Prisma).
-       3. Provide backend controller logic (e.g., Node/Python).
-       4. Provide frontend component logic (React).
-       Explain the code step-by-step.`;
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt,
-    config: {
-      tools: [{ googleSearch: {} }],
-      systemInstruction: "You are Zara, an expert Senior Software Engineer specializing in reverse-engineering and explaining open-source projects."
-    }
-  });
-  return response.text || "Analysis failed.";
+   return JSON.parse(response.text || '{ "score": 0, "feedback": "Error" }');
 };
