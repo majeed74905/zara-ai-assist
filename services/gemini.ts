@@ -14,7 +14,7 @@ import { Message, Role, Attachment, Source, ChatConfig, PersonalizationConfig, S
 import { memoryService } from "./memoryService";
 
 // Helper to init AI - STRICTLY use process.env.API_KEY
-export const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+export const getAI = () => new GoogleGenAI({ apiKey: process.env.APIKEY });
 
 const SAFETY_SETTINGS = [
   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
