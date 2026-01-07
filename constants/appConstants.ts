@@ -1,29 +1,25 @@
+
 import { ThemeName } from '../theme/types';
 import { ViewMode } from '../types';
 
 export const APP_VERSION = "Zara AI v3.0 Pro";
 
+// Mapping modes to specific aesthetic themes for automatic switching
 export const MODE_THEME_MAPPING: Partial<Record<ViewMode, ThemeName>> = {
+  chat: 'dark',
   live: 'aurora',
-  code: 'midnight',
+  workspace: 'royal',
   student: 'pastel',
   exam: 'light',
-  workspace: 'royal',
-  chat: 'dark',
-  planner: 'light',
-  analytics: 'midnight',
-  dashboard: 'light',
-  'life-os': 'pastel',
-  skills: 'midnight',
-  memory: 'glass',
-  creative: 'aurora',
-  pricing: 'royal',
+  code: 'solarizedDark',
   builder: 'midnight',
-  github: 'midnight'
+  github: 'aurora',
+  notes: 'glass',
+  planner: 'aurora'
 };
 
 export const DEFAULT_SYSTEM_CONFIG = {
-  autoTheme: true,
+  autoTheme: true, // Enabled by default to switch themes on mode change
   enableAnimations: true,
   density: 'comfortable' as 'comfortable' | 'compact',
   soundEffects: true

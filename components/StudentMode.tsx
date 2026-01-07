@@ -63,17 +63,18 @@ export const StudentMode: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col max-w-5xl mx-auto p-4 md:p-8 animate-fade-in">
-      <div className="mb-6">
+      <div className="mb-6 flex-shrink-0">
         <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-2">
           Student Companion
         </h2>
         <p className="text-text-sub">Generate study materials, notes, and quizzes instantly from any file.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Main Layout Grid - Constrained height with flexible scrolling */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden custom-scrollbar pr-1">
         
-        {/* Left Column: Controls */}
-        <div className="lg:col-span-1 space-y-4">
+        {/* Left Column: Controls - Independent Scroll on Desktop */}
+        <div className="lg:col-span-1 space-y-4 lg:h-full lg:overflow-y-auto custom-scrollbar lg:pr-2">
           
           <div className="glass-panel p-4 rounded-2xl">
             <div className="flex justify-between items-center mb-4">
@@ -215,8 +216,9 @@ export const StudentMode: React.FC = () => {
 
         </div>
 
-        <div className="lg:col-span-2">
-           <div className="glass-panel rounded-[2rem] p-6 md:p-10 h-full min-h-[550px] overflow-y-auto markdown-body relative custom-scrollbar bg-black/5">
+        {/* Right Column: Content Display - Fixed layout on desktop */}
+        <div className="lg:col-span-2 lg:h-full flex flex-col min-h-[500px] lg:min-h-0">
+           <div className="glass-panel rounded-[2rem] p-6 md:p-10 flex-1 overflow-y-auto markdown-body relative custom-scrollbar bg-black/5">
               {result ? (
                  <ReactMarkdown>{result}</ReactMarkdown>
               ) : (
@@ -230,7 +232,7 @@ export const StudentMode: React.FC = () => {
                  </div>
               )}
               {loading && (
-                 <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center">
+                 <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center rounded-[2rem]">
                     <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
                     <span className="text-xs font-black text-primary uppercase tracking-[0.3em] animate-pulse">Analyzing Sources...</span>
                  </div>

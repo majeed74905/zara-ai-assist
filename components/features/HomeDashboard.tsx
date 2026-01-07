@@ -1,12 +1,14 @@
+
 import React, { useEffect, useState } from 'react';
 import { Layout, Heart, Target, Brain, ArrowRight, Zap, MessageSquare, Clock, Calendar, Hammer } from 'lucide-react';
 import { ViewMode } from '../../types';
 
 interface HomeDashboardProps {
   onViewChange: (view: ViewMode) => void;
+  onActivateCare: () => void;
 }
 
-export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onViewChange }) => {
+export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onViewChange, onActivateCare }) => {
   const [greeting, setGreeting] = useState('');
   
   useEffect(() => {
@@ -27,18 +29,21 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onViewChange }) =>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         
-        {/* Mood Insight */}
-        <div className="bg-surface/50 border border-border rounded-2xl p-6 backdrop-blur-sm hover:border-primary/30 transition-all group animate-scale-in delay-100 hover:shadow-lg hover:-translate-y-1 duration-300">
+        {/* Mood Insight / Emotional Support */}
+        <div className="bg-surface/50 border border-border rounded-2xl p-6 backdrop-blur-sm hover:border-pink-500/30 transition-all group animate-scale-in delay-100 hover:shadow-lg hover:-translate-y-1 duration-300">
            <div className="flex justify-between items-start mb-4">
               <div className="p-2 bg-pink-500/10 rounded-lg text-pink-500 group-hover:scale-110 transition-transform">
                  <Heart className="w-6 h-6" />
               </div>
-              <span className="text-xs font-bold bg-surfaceHighlight px-2 py-1 rounded text-text-sub">Today</span>
+              <span className="text-xs font-bold bg-pink-500/10 text-pink-400 px-2 py-1 rounded border border-pink-500/20">Active Care</span>
            </div>
-           <h3 className="text-xl font-bold text-text mb-1">Balanced & Calm</h3>
-           <p className="text-sm text-text-sub mb-4">Your emotional baseline is stable today. Great time for deep work.</p>
-           <button onClick={() => onViewChange('life-os')} className="text-sm text-primary font-medium flex items-center gap-1 group-hover:gap-2 transition-all">
-              Open LifeOS <ArrowRight className="w-4 h-4" />
+           <h3 className="text-xl font-bold text-text mb-1">Emotional Support</h3>
+           <p className="text-sm text-text-sub mb-4">Feeling overwhelmed? Switch to emotional mode for a supportive companion.</p>
+           <button 
+             onClick={onActivateCare} 
+             className="w-full py-3 bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+           >
+              Talk to Zara Care <ArrowRight className="w-4 h-4" />
            </button>
         </div>
 
@@ -52,7 +57,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onViewChange }) =>
            </div>
            <h3 className="text-xl font-bold text-text mb-1">App Builder</h3>
            <p className="text-sm text-text-sub mb-4">Generate web apps, dashboards, and tools instantly with AI Architect.</p>
-           <button onClick={() => onViewChange('builder')} className="text-sm text-blue-400 font-bold flex items-center gap-1 group-hover:gap-2 transition-all">
+           <button onClick={() => onViewChange('builder')} className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20">
               Start Building <ArrowRight className="w-4 h-4" />
            </button>
         </div>
@@ -107,7 +112,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onViewChange }) =>
          <div className="bg-surface border border-border rounded-2xl p-6 animate-slide-up delay-300">
              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                <Clock className="w-5 h-5 text-text-sub" /> Recent Activity
-            </h3>
+             </h3>
             <div className="space-y-4">
                {[1, 2, 3].map((_, i) => (
                   <div key={i} className="flex items-center gap-3 p-3 rounded-xl hover:bg-surfaceHighlight transition-colors cursor-pointer group" onClick={() => onViewChange('chat')}>

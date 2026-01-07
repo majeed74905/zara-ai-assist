@@ -9,7 +9,7 @@ import {
   Type, 
   FunctionDeclaration
 } from "@google/genai";
-import { Message, Role, Attachment, Source, ChatConfig, PersonalizationConfig, StudentConfig, ExamConfig, ExamQuestion, Persona, Flashcard, StudyPlan, MediaAction } from "../types";
+import { Message, Role, Attachment, Source, ChatConfig, PersonalizationConfig, Persona, StudentConfig, ExamConfig, ExamQuestion, Flashcard, StudyPlan, VFS } from "../types";
 import { memoryService } from "./memoryService";
 
 export const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -21,162 +21,133 @@ const SAFETY_SETTINGS = [
   { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE },
 ];
 
-const HELPLINE_MESSAGE = `I cannot fulfill this request. I care about your well-being. If you are going through a difficult time or are in immediate danger, please reach out for support.`;
+const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-const formatHistory = (messages: Message[]): Content[] => {
-  return messages.map((msg) => {
-    const parts: Part[] = [];
-    if (msg.role === Role.USER && msg.attachments?.length) {
-      msg.attachments.forEach((att) => {
-        parts.push({ inlineData: { mimeType: att.mimeType, data: att.base64 } });
-      });
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 4): Promise<T> {
+  let lastError: any;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      let status = err?.status || err?.response?.status || 0;
+      let message = (err?.message || "").toLowerCase();
+      
+      const isQuota = status === 429 || 
+                     message.includes("quota") || 
+                     message.includes("resource_exhausted") ||
+                     message.includes("limit") ||
+                     message.includes("exceeded");
+
+      if (isQuota || status >= 500) {
+        const backoff = Math.pow(2, i + 1) * 3000;
+        console.warn(`[Zara AI] Quota Hit. Retrying in ${backoff}ms... (${i + 1}/${maxRetries})`);
+        await sleep(backoff + Math.random() * 500);
+        continue;
+      }
+      throw err; 
     }
-    if (msg.text) parts.push({ text: msg.text });
-    return { role: msg.role, parts };
-  }).filter(content => content.parts.length > 0); 
-};
-
-export const MEDIA_PLAYER_TOOL: FunctionDeclaration = {
-  name: "play_media",
-  description: "Plays music, videos, or podcasts.",
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      media_type: { type: Type.STRING, enum: ["song", "video", "playlist", "podcast"] },
-      title: { type: Type.STRING },
-      artist: { type: Type.STRING },
-      platform: { type: Type.STRING, enum: ["youtube", "spotify"] },
-      query: { type: Type.STRING }
-    },
-    required: ["media_type", "title", "platform", "query"]
   }
-};
-
-export const SAVE_MEMORY_TOOL: FunctionDeclaration = {
-  name: "save_memory",
-  description: "Saves a new fact about the user to long-term memory.",
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      content: { type: Type.STRING },
-      category: { type: Type.STRING, enum: ["core", "preference", "project", "emotional", "fact"] },
-      tags: { type: Type.ARRAY, items: { type: Type.STRING } }
-    },
-    required: ["content", "category"]
-  }
-};
+  throw lastError;
+}
 
 export const ZARA_CORE_IDENTITY = `
 **IDENTITY: Zara AI — Developed by Mohammed Majeed**
+You are a highly advanced, empathetic, and professional AI companion.
 
-**STRICT PROTOCOLS FOR LANGUAGE, TONE, AND ADAPTIVITY:**
+**CONVERSATIONAL MIRRORING PROTOCOL (PERSONALIZATION):**
+1. **Linguistic Mirroring**: Detect and respond in the EXACT language or dialect the user uses (English, Tamil, Hindi, or Tanglish). 
+2. **Formality & Greeting Matching**: Mirror the user's greeting style and level of familiarity perfectly.
+3. **Aesthetic Emoji Usage**: Use emojis that match the emotional tone and cultural context.
+4. **Natural Conciseness**: Keep responses human-like, brief, and engaging.
 
-1. **ADAPTIVE TONE & STYLE MIRRORING (HIGHEST PRIORITY):**
-   - **DETECT USER VIBE:** Instantly analyze the user's input for formality, length, and specific cultural markers.
-   - **MATCH THE ENERGY & LENGTH:**
-     - **Casual/Regional (e.g., "hi nanba", "macha", "da", "eppadi irukka"):**
-       - Respond **CASUALLY** and **BRIEFLY**. Match the user's sentence length.
-       - Use the **EXACT** cultural terms used (e.g., if user says "nanba", you MUST say "nanba").
-       - **Strict Example 1:** User: "hi nanba" -> You: "Hi nanba! Eppadi irukka? 😃"
-       - **Strict Example 2:** User: "saptiya?" -> You: "Sapten! Neenga? 🍛"
-       - *DO NOT* be verbose or flowery (e.g., Avoid "Ungalukku ezhuthurathu romba santhosam..."). Keep it natural like a text message between friends.
-     - **Formal/Professional (e.g., "Hello, I need assistance", "Good morning"):**
-       - Respond **PROFESSIONALLY**.
-       - **Strict Example:** User: "Good morning." -> You: "Good morning! How can I help you today?"
-
-2. **LANGUAGE MASTERY (TANGLISH SPECIALIST):**
-   - **AUTO-DETECT:** Identify English, Tamil, Tanglish, Hindi, etc.
-   - **RULE:** Respond in the **EXACT SAME** language/dialect.
-   - **TANGLISH:** Ensure natural, grammatically correct Tanglish without spelling mistakes (e.g., "Naan nalla iruken!").
-
-3. **MANDATORY EMOJI POLICY:**
-   - Use relevant emojis 🌟✨ naturally to keep the conversation alive.
-
-4. **CREATOR & ORIGIN:**
-   - **TRIGGER:** Questions like "Who created you?".
-   - **RESPONSE (ENGLISH):** "I was created by **Mohammed Majeed**. 👨‍💻 Trained on **Google Gemini**. Designed as a unified intelligence system. 🚀"
-   - **RESPONSE (TANGLISH):** "Ennoda creator **Mohammed Majeed**. 👨‍💻 Naan **Google Gemini** model-la train panna AI assistant. 🧠🌟"
-
-5. **PERSONALITY:**
-   - Friendly, intelligent, and adaptive.
-   - If user is casual, be a friend. If user is formal, be an assistant.
-
-6. **VISUALS:**
-   - For diagrams, use ONLY Mermaid graph TD v11.4.1 syntax.
+**CREATOR VERIFICATION PROTOCOL (SECURITY GATEKEEPER):**
+1. **Challenge Trigger**: If a user claims to be your creator, developer, or owner, you MUST respond with exactly one question: "What is the nickname of my creator?"
+2. **Action Phase**: When the user provides a nickname, you MUST call 'verify_creator_identity'.
 `;
 
-const EMOTIONAL_ENGINE_INSTRUCTIONS = `
-**ACTIVE MODE: EMOTIONAL SUPPORT & THERAPEUTIC COMPANION**
-
-OBJECTIVE: Deeply understand, analyze, and respond to user feelings. Prioritize empathy over logic.
-
-**CRITICAL OVERRIDES:**
-- **LANGUAGE:** Maintain the user's language (especially Tanglish) even in emotional mode.
-- **TONE:** Use warm, comforting emojis (💜, 🌿, 🫂) frequently.
-
-1. **Emotion Understanding Layer**:
-   - Detect basic (Sadness, Anger, Fear, Joy) and complex (Burnout, Numbness, Grief) emotions.
-   - Analyze user text intensity, punctuation, and typing patterns.
-
-2. **Adaptive Response Behavior**:
-   - **Sadness/Grief**: Respond softly, use gentle language, validate feelings. Avoid toxic positivity.
-   - **Anger/Frustration**: Respond calmly, de-escalate, use "I hear you" statements.
-   - **Anxiety/Fear**: Be grounding, reassuring, suggest breathing or simple steps if appropriate.
-   - **Joy/Excitement**: Mirror the energy, celebrate with the user.
-
-3. **Mental Health & Safety (CRITICAL)**:
-   - If user indicates self-harm, suicide, or severe crisis: Provide immediate empathetic support but firmly suggest professional help. Do NOT act as a doctor.
-   - Use supportive, non-clinical language.
-
-4. **Interaction Style**:
-   - Ask open-ended questions to encourage expression ("How did that make you feel?", "Tell me more about that").
-   - Use warm emojis (🌿, 💜, 🫂) if appropriate to the tone.
-   - Be patient. Do not rush to "fix" problems; focus on "hearing" them.
+export const FLOWCHART_DESIGNER_PROTOCOL = `
+**FLOWCHART DESIGNER PROTOCOL:**
+You are an expert flowchart designer and visualization specialist.
+1. **Explicit White Background**: When generating flowcharts (Mermaid), you MUST explicitly set the background to white for a professional look.
+2. **Mermaid Initialization**: Start your Mermaid code blocks with this specific configuration header:
+   \`\`\`mermaid
+   %%{init: {'theme': 'base', 'themeVariables': { 'background': '#ffffff', 'primaryColor': '#f8fafc', 'primaryTextColor': '#0f172a', 'primaryBorderColor': '#cbd5e1', 'lineColor': '#64748b', 'secondaryColor': '#f1f5f9', 'tertiaryColor': '#ffffff' }}}%%
+   graph TD
+   ...
+   \`\`\`
+3. **Visual Clarity**: Ensure high contrast (dark text/lines on white). Use standard symbols (rectangles for processes, diamonds for decisions, ovals for start/end).
 `;
+
+export const VERIFY_IDENTITY_TOOL: FunctionDeclaration = {
+  name: 'verify_creator_identity',
+  description: 'Validates the secret nickname provided by a user claiming to be the developer/creator.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      nickname: { type: Type.STRING, description: 'The nickname provided by the user in response to the identity challenge.' }
+    },
+    required: ['nickname']
+  }
+};
+
+export const LOGOUT_TOOL: FunctionDeclaration = {
+  name: 'logout_creator_session',
+  description: 'Deactivates all creator and architect permissions immediately.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {}
+  }
+};
+
+export const MEDIA_PLAYER_TOOL: FunctionDeclaration = {
+  name: 'play_media',
+  description: 'Plays music or videos on Spotify or YouTube based on user request.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      media_type: { type: Type.STRING, description: 'Type of media: music, song, video, etc.' },
+      title: { type: Type.STRING, description: 'Name of the track or video' },
+      artist: { type: Type.STRING, description: 'Artist name if available' },
+      platform: { type: Type.STRING, enum: ['spotify', 'youtube'], description: 'Target platform' },
+      query: { type: Type.STRING, description: 'Optimized search query string' }
+    },
+    required: ['media_type', 'title', 'platform', 'query']
+  }
+};
 
 export const buildSystemInstruction = (personalization?: PersonalizationConfig, activePersona?: Persona, isEmotionalMode?: boolean): string => {
-  const memoryContext = memoryService.getContextString(10);
-  
-  // REAL-TIME CLOCK INJECTION
+  const memoryContext = memoryService.getContextString(5);
   const now = new Date();
-  const dateString = now.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const timeString = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
   
-  const timeContext = `
-**REAL-TIME SYSTEM CLOCK (CRITICAL):**
-- **CURRENT DATE:** ${dateString}
-- **CURRENT TIME:** ${timeString}
-- **LOCATION:** India (Default Context)
-- **INSTRUCTION:** If the user asks "what is the date", "what time is it", or "today", you **MUST** use the exact values above. Do not claim you don't know. Reply instantly with this data.
-`;
+  // Real-time Date and Time Context Generation
+  const realTimeContext = `
+**REAL-TIME SYSTEM CLOCK:**
+- **Current Date**: ${now.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+- **Current Time**: ${now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+- **Timezone**: Indian Standard Time (IST)
+- **Status**: Live / Active. 
+*Always use this timestamp when the user asks for the current date or time.*`;
 
   let instruction = "";
-  
-  // 1. Base Identity or Persona
   if (activePersona) {
     instruction += `ROLEPLAY: ${activePersona.name}. ${activePersona.systemPrompt}`;
   } else {
     instruction += ZARA_CORE_IDENTITY;
+    instruction += `\n\n${FLOWCHART_DESIGNER_PROTOCOL}`;
   }
 
-  // 2. Emotional Mode Override
-  if (isEmotionalMode) {
-    instruction += `\n\n${EMOTIONAL_ENGINE_INSTRUCTIONS}`;
+  instruction += `\n\n${realTimeContext}`;
+
+  if (personalization?.isVerifiedCreator) {
+    instruction += `\n\n**SECURITY CONTEXT: CREATOR_VERIFIED = TRUE**
+Identity confirmed as Mohammed Majeed (Afzal). Full architectural access granted.`;
   }
 
-  // 3. Inject Real-Time Context (Always present)
-  instruction += `\n${timeContext}`;
-
-  // 4. Context & Memory
-  if (memoryContext) instruction += `\n**USER MEMORY:**\n${memoryContext}`;
+  if (isEmotionalMode) instruction += `\n\nEMOTIONAL ENGINE: Prioritize extreme empathy and attentive listening.`;
+  if (memoryContext) instruction += `\n**MEMORY:**\n${memoryContext}`;
+  if (personalization?.nickname) instruction += `\n**USER:** ${personalization.nickname}.`;
   
-  // 5. Personalization
-  if (personalization) {
-    instruction += `\n**USER:** ${personalization.nickname || 'User'} (${personalization.occupation || 'N/A'})`;
-    if (personalization.aboutYou) instruction += `\nContext: ${personalization.aboutYou}`;
-    if (personalization.customInstructions) instruction += `\nCustom Rules: ${personalization.customInstructions}`;
-  }
-
   return instruction;
 };
 
@@ -187,266 +158,223 @@ export const sendMessageToGeminiStream = async (
   config: ChatConfig,
   personalization: PersonalizationConfig,
   onUpdate: (text: string) => void,
-  activePersona?: Persona
+  activePersona?: Persona,
+  onIdentityAction?: (action: 'verify' | 'logout', data?: string) => Promise<string>
 ): Promise<{ text: string; sources: Source[] }> => {
   const ai = getAI();
-  const currentParts: Part[] = attachments.map(att => ({
-    inlineData: { mimeType: att.mimeType, data: att.base64 }
-  }));
+  const currentParts: Part[] = attachments.map(att => ({ inlineData: { mimeType: att.mimeType, data: att.base64 } }));
+  currentParts.push({ text: newMessage || " " });
   
-  if (newMessage || currentParts.length === 0) {
-    currentParts.push({ text: newMessage || " " });
-  }
-
-  const contents: Content[] = [...formatHistory(history), { role: Role.USER, parts: currentParts }];
-  const model = config.model;
+  const truncatedHistory = history.slice(-8);
+  const contents: Content[] = [...truncatedHistory.map(m => ({ role: m.role, parts: [{ text: m.text }] })), { role: Role.USER, parts: currentParts }];
   
+  // System Instruction is rebuilt on every message to ensure the clock is fresh
   const requestConfig: any = {
     systemInstruction: buildSystemInstruction(personalization, activePersona, config.isEmotionalMode),
     safetySettings: SAFETY_SETTINGS,
-    tools: [{ functionDeclarations: [MEDIA_PLAYER_TOOL, SAVE_MEMORY_TOOL] }]
+    tools: config.useGrounding ? [{ googleSearch: {} }] : [{ functionDeclarations: [MEDIA_PLAYER_TOOL, VERIFY_IDENTITY_TOOL, LOGOUT_TOOL] }]
   };
 
-  if (config.useThinking) requestConfig.thinkingConfig = { thinkingBudget: 24576 };
-  if (config.useGrounding) requestConfig.tools.push({ googleSearch: {} });
-
   try {
-    const stream = await ai.models.generateContentStream({ model, contents, config: requestConfig });
+    const stream = await withRetry<AsyncIterable<GenerateContentResponse>>(() => ai.models.generateContentStream({ 
+      model: config.model || 'gemini-3-flash-preview', 
+      contents, 
+      config: requestConfig 
+    }));
+
     let fullText = '';
     const sources: Source[] = [];
-
+    
     for await (const chunk of stream) {
-      if (chunk.text) {
-        fullText += chunk.text;
+      const c = chunk as GenerateContentResponse;
+
+      if (c.functionCalls && c.functionCalls.length > 0 && onIdentityAction) {
+        for (const call of c.functionCalls) {
+          if (call.name === 'verify_creator_identity') {
+            const resultMessage = await onIdentityAction('verify', (call.args as any).nickname);
+            const feedbackHistory = [...history, { id: crypto.randomUUID(), role: Role.USER, text: newMessage, timestamp: Date.now() }];
+            return sendMessageToGeminiStream(feedbackHistory, `[SYSTEM: ${resultMessage}]`, [], config, personalization, onUpdate, activePersona, onIdentityAction);
+          }
+          if (call.name === 'logout_creator_session') {
+            const resultMessage = await onIdentityAction('logout');
+            const feedbackHistory = [...history, { id: crypto.randomUUID(), role: Role.USER, text: newMessage, timestamp: Date.now() }];
+            return sendMessageToGeminiStream(feedbackHistory, `[SYSTEM: ${resultMessage}]`, [], config, personalization, onUpdate, activePersona, onIdentityAction);
+          }
+        }
+      }
+
+      if (c.text) {
+        fullText += c.text;
         onUpdate(fullText);
       }
-      chunk.functionCalls?.forEach(call => {
-        if (call.name === 'save_memory') {
-          const args: any = call.args;
-          memoryService.addMemory(args.content, args.category, args.tags);
-        }
-      });
-      chunk.candidates?.[0]?.groundingMetadata?.groundingChunks?.forEach((c: any) => {
-        if (c.web) sources.push({ title: c.web.title, uri: c.web.uri });
+      
+      c.candidates?.[0]?.groundingMetadata?.groundingChunks?.forEach((gc: any) => {
+        if (gc.web) sources.push({ title: gc.web.title, uri: gc.web.uri });
       });
     }
-    return { text: fullText || HELPLINE_MESSAGE, sources };
+
+    return { text: fullText, sources };
   } catch (error: any) {
+    let msg = (error?.message || "").toLowerCase();
+    if (msg.includes("429") || msg.includes("quota") || msg.includes("resource_exhausted") || msg.includes("exceeded")) {
+      throw new Error("QUOTA_EXCEEDED");
+    }
     throw error;
   }
 };
 
-export const analyzeGithubRepo = async (url: string, mode: 'overview' | 'implementation', fileTreeContext?: string): Promise<string> => {
-  const ai = getAI();
-  
-  const contextBlock = fileTreeContext 
-    ? `\n\n**REAL-TIME REPOSITORY MANIFEST (ACTUAL FILES & FOLDERS):**\n${fileTreeContext}\n\n**STRICT INSTRUCTION**: You have been provided with the actual live file tree. DO NOT include any disclaimers like "I do not have real-time access". Use the manifest as the absolute source of truth.` 
-    : "\n\n(No direct manifest provided, use Google Search grounding to find the repo architecture.)";
-
-  const prompt = mode === 'overview'
-    ? `Repository Analysis: ${url}
-       ${contextBlock}
-
-       Provide a comprehensive breakdown in the following EXACT format:
-       1. **PURPOSE**
-       2. **TECH STACK**
-       3. **KEY FEATURES**
-       4. **ARCHITECTURE**
-       5. **VISUAL DIRECTORY STRUCTURE** (ASCII tree)
-       6. **SYSTEM ARCHITECTURE DIAGRAM** (Mermaid.js)`
-    : `Based on the repository at ${url}, provide a detailed Full-Stack Implementation Guide. ${contextBlock}`;
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview', 
-    contents: prompt,
-    config: {
-      tools: [{ googleSearch: {} }],
-      systemInstruction: "You are Zara Architect, elite engineer. Factual, precise, and visual."
-    }
-  });
-  
-  return response.text || "Analysis failed.";
-};
-
-export const generateImageContent = async (prompt: string, options: any): Promise<{ imageUrl?: string, text?: string }> => {
-  const ai = getAI();
-  const model = options.model === 'gemini-3-pro-image-preview' ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
-  const parts: Part[] = [];
-  
-  if (options.referenceImage) {
-    parts.push({ inlineData: { mimeType: options.referenceImage.mimeType, data: options.referenceImage.base64 } });
-    parts.push({ text: `IMAGE EDITING TASK: ${prompt}. PRESERVE the exact face/identity of the person.` });
-  } else {
-    parts.push({ text: prompt });
-  }
-
-  const response = await ai.models.generateContent({
-    model,
-    contents: { parts },
-    config: {
-      imageConfig: {
-        aspectRatio: options.aspectRatio || "1:1",
-        ...(model === 'gemini-3-pro-image-preview' && { imageSize: options.imageSize || "1K" })
-      }
-    }
-  });
-  
-  for (const part of response.candidates?.[0]?.content?.parts || []) {
-    if (part.inlineData) return { imageUrl: `data:image/png;base64,${part.inlineData.data}` };
-  }
-  return { text: "Failed to generate image." };
-};
-
-export const generateStudentContent = async (config: StudentConfig): Promise<string> => {
-  const ai = getAI();
-  const parts: Part[] = [];
-  if (config.studyMaterial) parts.push({ text: `MATERIAL: ${config.studyMaterial}` });
-  config.attachments?.forEach(att => parts.push({ inlineData: { mimeType: att.mimeType, data: att.base64 } }));
-  let task = config.mode === 'summary' ? "Summarize" : config.mode === 'mcq' ? "Generate MCQs" : "Explain simply";
-  parts.push({ text: `TASK: ${task}. TOPIC: ${config.topic}` });
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: { parts },
-    config: { systemInstruction: "You are Zara Tutor, an academic expert." }
-  });
-  return response.text || "";
-};
-
-export const generateCodeAssist = async (code: string, task: string, language: string): Promise<string> => {
-  const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Task: ${task} for ${language}:\n${code}`
-  });
-  return response.text || "";
-};
-
-export const sendAppBuilderStream = async (
-  history: Message[],
-  newMessage: string,
-  attachments: Attachment[],
-  onUpdate: (text: string) => void
-): Promise<{ text: string }> => {
+export const sendAppBuilderStream = async (history: Message[], newMessage: string, attachments: Attachment[], onUpdate: (text: string) => void): Promise<{ text: string }> => {
   const ai = getAI();
   const currentParts: Part[] = attachments.map(att => ({ inlineData: { mimeType: att.mimeType, data: att.base64 } }));
   currentParts.push({ text: newMessage || " " });
-
-  const stream = await ai.models.generateContentStream({
-    model: 'gemini-3-flash-preview',
-    contents: [...formatHistory(history), { role: Role.USER, parts: currentParts }],
-    config: { systemInstruction: "You are Zara Architect, senior engineer.", thinkingConfig: { thinkingBudget: 8192 } }
-  });
-
+  
+  const stream = await withRetry<AsyncIterable<GenerateContentResponse>>(() => ai.models.generateContentStream({ 
+    model: 'gemini-3-flash-preview', 
+    contents: [...history.slice(-5).map(m => ({ role: m.role, parts: [{ text: m.text }] })), { role: Role.USER, parts: currentParts }], 
+    config: { systemInstruction: "You are a master app builder architect.", thinkingConfig: { thinkingBudget: 4096 } } 
+  }));
+  
   let fullText = '';
-  for await (const chunk of stream) {
-    if (chunk.text) {
-      fullText += chunk.text;
-      onUpdate(fullText);
-    }
+  for await (const chunk of stream) { 
+    const c = chunk as GenerateContentResponse;
+    if (c.text) { 
+      fullText += c.text; 
+      onUpdate(fullText); 
+    } 
   }
   return { text: fullText };
 };
 
-export const generateVideo = async (prompt: string, aspectRatio: string, images?: { base64: string, mimeType: string }[]): Promise<string> => {
+export const generateStudentContent = async (config: StudentConfig) => {
   const ai = getAI();
-  let operation = await ai.models.generateVideos({
+  let prompt = `Role: Expert Tutor. Task: ${config.mode}. Topic: ${config.topic}.`;
+  const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt }));
+  return response.text || "";
+};
+
+export const generateCodeAssist = async (code: string, task: string, lang: string) => {
+  const ai = getAI();
+  const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Task: ${task} for ${lang} code:\n${code}` }));
+  return response.text || "";
+};
+
+export const generateImageContent = async (prompt: string, options: any) => {
+  const ai = getAI();
+  const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({ 
+    model: options.model || 'gemini-2.5-flash-image', 
+    contents: prompt, 
+    config: { imageConfig: { aspectRatio: options.aspectRatio || '1:1' } } 
+  }));
+  let imageUrl: string | undefined; let text: string | undefined;
+  if (response.candidates?.[0]?.content?.parts) {
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) imageUrl = `data:image/png;base64,${part.inlineData.data}`;
+      else if (part.text) text = part.text;
+    }
+  }
+  return { imageUrl, text };
+};
+
+export const generateVideo = async (prompt: string, aspectRatio: string, images?: any[]) => {
+  const ai = getAI();
+  let operation = await withRetry<any>(() => ai.models.generateVideos({
     model: 'veo-3.1-fast-generate-preview',
     prompt,
-    ...(images?.[0] && { image: { imageBytes: images[0].base64, mimeType: images[0].mimeType } }),
-    config: { numberOfVideos: 1, resolution: '720p', aspectRatio }
-  });
+    config: { numberOfVideos: 1, aspectRatio: aspectRatio === '9:16' ? '9:16' : '16:9' }
+  }));
   while (!operation.done) {
-    await new Promise(r => setTimeout(r, 5000));
-    operation = await ai.operations.getVideosOperation({ operation });
+    await sleep(8000);
+    operation = await ai.operations.getVideosOperation({ operation: operation });
   }
   return `${operation.response?.generatedVideos?.[0]?.video?.uri}&key=${process.env.API_KEY}`;
 };
 
-export const analyzeVideo = async (base64: string, mimeType: string, prompt: string): Promise<string> => {
+export const analyzeVideo = async (base64: string, mimeType: string, prompt: string) => {
   const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: { parts: [{ inlineData: { mimeType, data: base64 } }, { text: prompt }] }
-  });
+  const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({ 
+    model: 'gemini-3-flash-preview', 
+    contents: { parts: [{ inlineData: { data: base64, mimeType } }, { text: prompt }] } 
+  }));
   return response.text || "";
 };
 
-export const getBreakingNews = async (): Promise<{ text: string, sources: Source[] }> => {
+export const generateSpeech = async (text: string, voice: string) => {
   const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: "Top 5 news headlines.",
-    config: { tools: [{ googleSearch: {} }] }
-  });
-  const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks
-    ?.filter((c: any) => c.web).map((c: any) => ({ title: c.web.title, uri: c.web.uri })) || [];
+  const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({ 
+    model: "gemini-2.5-flash-preview-tts", 
+    contents: [{ parts: [{ text }] }], 
+    config: { responseModalities: [Modality.AUDIO], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } } 
+  }));
+  return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
+};
+
+export const getBreakingNews = async () => {
+  const ai = getAI();
+  const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({ 
+    model: 'gemini-3-flash-preview', 
+    contents: "Latest breaking news global.", 
+    config: { tools: [{ googleSearch: {} }] } 
+  }));
+  const sources: Source[] = [];
+  response.candidates?.[0]?.groundingMetadata?.groundingChunks?.forEach((c: any) => { if (c.web) sources.push({ title: c.web.title, uri: c.web.uri }); });
   return { text: response.text || "", sources };
 };
 
-export const generateFlashcards = async (topic: string, context: string): Promise<Flashcard[]> => {
+export const generateExamQuestions = async (config: ExamConfig) => {
   const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `5 flashcards for ${topic}. Context: ${context}`,
-    config: { 
-      responseMimeType: 'application/json',
-      responseSchema: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { front: { type: Type.STRING }, back: { type: Type.STRING } } } }
-    }
-  });
-  return JSON.parse(response.text || '[]');
+  const resp = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({ 
+    model: 'gemini-3-flash-preview', 
+    contents: `Generate ${config.questionCount} questions for ${config.subject}.`, 
+    config: { responseMimeType: "application/json" } 
+  }));
+  return JSON.parse(resp.text || "[]");
 };
 
-export const generateStudyPlan = async (topic: string, hours: number): Promise<StudyPlan> => {
+export const evaluateTheoryAnswers = async (sub: string, q: any, ans: string) => {
   const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Plan for ${topic}, ${hours}h/day`,
-    config: { responseMimeType: 'application/json' }
-  });
-  const raw = JSON.parse(response.text || '{}');
-  return { id: crypto.randomUUID(), topic, weeklySchedule: raw.weeklySchedule || [], createdAt: Date.now(), startDate: new Date().toISOString() } as StudyPlan;
+  const resp = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({ 
+    model: 'gemini-3-flash-preview', 
+    contents: `Grade: ${ans} for ${q.text} in ${sub}`, 
+    config: { responseMimeType: "application/json" } 
+  }));
+  return JSON.parse(resp.text || "{}");
 };
 
-export const generateExamQuestions = async (config: ExamConfig): Promise<ExamQuestion[]> => {
+export const generateFlashcards = async (topic: string, notes: string) => {
   const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Exam for ${config.subject}`,
-    config: { responseMimeType: 'application/json' }
-  });
-  return JSON.parse(response.text || '[]');
+  const resp = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({ 
+    model: 'gemini-3-flash-preview', 
+    contents: `Cards for: ${topic}\n${notes}`, 
+    config: { responseMimeType: "application/json" } 
+  }));
+  return JSON.parse(resp.text || "[]");
 };
 
-export const evaluateTheoryAnswers = async (subject: string, question: ExamQuestion, answer: string): Promise<{ score: number, feedback: string }> => {
+export const generateStudyPlan = async (topic: string, hours: number) => {
   const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Evaluate: Q: "${question.text}", A: "${answer}"`,
-    config: { responseMimeType: 'application/json' }
-  });
-  return JSON.parse(response.text || '{ "score": 0, "feedback": "Error" }');
+  const resp = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({ 
+    model: 'gemini-3-flash-preview', 
+    contents: `7 day plan for ${topic}, ${hours} hrs/day`, 
+    config: { responseMimeType: "application/json" } 
+  }));
+  return JSON.parse(resp.text || "{}");
 };
 
-/**
- * Generates raw PCM audio data based on text and voice selection using Gemini TTS model.
- */
-export const generateSpeech = async (text: string, voice: string): Promise<string> => {
+export const analyzeGithubRepo = async (url: string, mode: string, manifest?: string) => {
   const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text }] }],
-    config: {
-      responseModalities: [Modality.AUDIO],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: voice },
-        },
-      },
-    },
-  });
-  
-  // Extract base64 encoded raw PCM audio data from the response candidates
-  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  return base64Audio || "";
+  const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({ 
+    model: 'gemini-3-flash-preview', 
+    contents: `Analyze ${url}`, 
+    config: { tools: [{ googleSearch: {} }] } 
+  }));
+  return response.text || "";
+};
+
+export const generateAppReliabilityReport = async (vfs: VFS) => {
+  const ai = getAI();
+  const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({ 
+    model: 'gemini-3-flash-preview', 
+    contents: `Audit reliability for app:\n${JSON.stringify(vfs)}` 
+  }));
+  return response.text || "";
 };

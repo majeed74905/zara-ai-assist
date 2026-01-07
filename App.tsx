@@ -1,8 +1,10 @@
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Sparkles, BookOpen, Heart, Code2, Palette, Hammer, WifiOff, Globe, Search, ChevronDown, Brain, Upload, FileText, File } from 'lucide-react';
+import { Sparkles, BookOpen, Heart, Code2, Palette, Hammer, WifiOff, Globe, Search, ChevronDown, Brain, Upload, FileText, File, Menu, X } from 'lucide-react';
 import { Message, Role, Attachment, ViewMode, ChatConfig, PersonalizationConfig, Persona } from './types';
 import { sendMessageToGeminiStream } from './services/gemini';
 import { OfflineService } from './services/offlineService';
+import { securityService } from './services/securityService';
 import { MessageItem } from './components/MessageItem';
 import { InputArea } from './components/InputArea';
 import { SettingsModal } from './components/SettingsModal';
@@ -36,12 +38,15 @@ import { MemoryVault } from './components/features/MemoryVault';
 import { CreativeStudio } from './components/features/CreativeStudio';
 import { PricingView } from './components/os/PricingView';
 import { exportChatToMarkdown, exportChatToPDF, exportChatToText } from './utils/exportUtils';
+import { useBackgroundSync } from './hooks/useBackgroundSync';
 
 const STORAGE_KEY_PERSONALIZATION = 'zara_personalization';
 
 const App: React.FC = () => {
   const { lastView, updateView, systemConfig, updateSystemConfig } = useAppMemory();
   const { currentThemeName, setTheme } = useTheme();
+  
+  useBackgroundSync();
 
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -51,7 +56,6 @@ const App: React.FC = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showExportMenu, setShowExportMenu] = useState(false);
   
-  // Animation State for Branding Star
   const [isFlipping, setIsFlipping] = useState(false);
 
   useEffect(() => {
@@ -76,10 +80,18 @@ const App: React.FC = () => {
     setIsSidebarOpen(false);
   }, [updateView]);
 
-  useModeThemeSync(currentView, systemConfig.autoTheme, setTheme);
+  const [chatConfig, setChatConfig] = useState<ChatConfig>({ 
+    model: 'gemini-3-flash-preview', 
+    useThinking: false, 
+    useGrounding: false,
+    isEmotionalMode: false 
+  });
+
+  useModeThemeSync(currentView, chatConfig.isEmotionalMode, systemConfig.autoTheme, setTheme);
   
   const [personalization, setPersonalization] = useState<PersonalizationConfig>({
-    nickname: '', occupation: '', aboutYou: '', customInstructions: '', fontSize: 'medium'
+    nickname: '', occupation: '', aboutYou: '', customInstructions: '', fontSize: 'medium',
+    isVerifiedCreator: securityService.isVerified()
   });
 
   const { 
@@ -89,12 +101,6 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [chatConfig, setChatConfig] = useState<ChatConfig>({ 
-    model: 'gemini-2.5-flash', 
-    useThinking: false, 
-    useGrounding: false,
-    isEmotionalMode: false 
-  });
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -104,11 +110,29 @@ const App: React.FC = () => {
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY_PERSONALIZATION);
     if (stored) {
-      try { setPersonalization(JSON.parse(stored)); } catch(e) {}
+      try { 
+        const p = JSON.parse(stored);
+        setPersonalization({ ...p, isVerifiedCreator: securityService.isVerified() }); 
+      } catch(e) {}
     }
   }, []);
 
+  const handleSecurityAction = async (action: 'verify' | 'logout', data?: string): Promise<string> => {
+    if (action === 'verify' && data) {
+      const result = securityService.verify(data);
+      setPersonalization(prev => ({ ...prev, isVerifiedCreator: result.success }));
+      return result.message;
+    } else if (action === 'logout') {
+      securityService.logout();
+      setPersonalization(prev => ({ ...prev, isVerifiedCreator: false }));
+      return "You’ve been logged out. How can I help you?";
+    }
+    return "Action failed.";
+  };
+
   const handleSendMessage = async (text: string, attachments: Attachment[]) => {
+    if (isLoading) return;
+
     abortRef.current = false;
     shouldAutoScrollRef.current = true;
     
@@ -157,7 +181,8 @@ const App: React.FC = () => {
              if (abortRef.current) return;
              setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, text: partial } : m));
         },
-        activePersona
+        activePersona,
+        handleSecurityAction
       );
       
       if (abortRef.current) return;
@@ -167,7 +192,15 @@ const App: React.FC = () => {
       if (currentSessionId) updateSession(currentSessionId, finalMessages); else createSession(finalMessages);
     } catch (error: any) {
       if (abortRef.current) return;
-      setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, isStreaming: false, isError: true, text: m.text || "Connection failed." } : m));
+      
+      let errorMessage = "Zara AI is currently unstable. Please try again in a moment.";
+      const errorStr = (error?.message || "").toLowerCase();
+      
+      if (errorStr.includes("quota_exceeded") || errorStr.includes("429") || errorStr.includes("resource_exhausted") || errorStr.includes("limit") || errorStr.includes("exceeded")) {
+        errorMessage = "QUOTA EXCEEDED: I've reached the API processing limit for this minute. This usually happens during long conversations. I'll reset automatically in about 30 seconds. Please wait before trying again.";
+      }
+
+      setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, isStreaming: false, isError: true, text: errorMessage } : m));
     } finally {
       setIsLoading(false);
     }
@@ -175,61 +208,93 @@ const App: React.FC = () => {
 
   const currentSession = currentSessionId ? sessions.find(s => s.id === currentSessionId) || null : null;
 
-  // Memoize content based on view to prevent unnecessary re-renders, but trigger animations on view change
+  const handleActivateCare = useCallback(() => {
+    setChatConfig(prev => ({ ...prev, isEmotionalMode: true }));
+    handleViewChange('chat');
+  }, [handleViewChange]);
+
+  const MobileMenuToggle = () => (
+    <button 
+      onClick={() => setIsSidebarOpen(true)} 
+      className="p-2 -ml-2 text-text hover:bg-surfaceHighlight rounded-lg md:hidden flex-shrink-0"
+      aria-label="Open Navigation"
+    >
+      <Menu className="w-6 h-6" />
+    </button>
+  );
+
   const currentContent = useMemo(() => {
+    const withMobileHeader = (content: React.ReactNode, title: string) => (
+      <div className="flex flex-col h-full w-full">
+         <header className="md:hidden flex items-center px-4 py-3 bg-background/50 backdrop-blur-sm border-b border-white/5 z-30 sticky top-0">
+            <MobileMenuToggle />
+            <span className="ml-2 font-bold text-sm uppercase tracking-widest text-primary truncate">{title}</span>
+         </header>
+         <div className="flex-1 overflow-hidden">
+            {content}
+         </div>
+      </div>
+    );
+
     switch (currentView) {
-      case 'dashboard': return <HomeDashboard onViewChange={handleViewChange} />;
-      case 'student': return <StudentMode />;
-      case 'code': return <CodeMode />;
-      case 'live': return <LiveMode personalization={personalization} />;
-      case 'exam': return <ExamMode />;
-      case 'analytics': return <AnalyticsDashboard />;
-      case 'planner': return <StudyPlanner />;
-      case 'about': return <AboutPage />;
-      case 'workspace': return <ImageMode />;
-      case 'builder': return <AppBuilderMode />;
-      case 'notes': return <NotesVault onStartChat={(ctx) => { handleSendMessage(ctx, []); handleViewChange('chat'); }} />;
-      case 'life-os': return <LifeOS />;
-      case 'skills': return <SkillOS />;
-      case 'memory': return <MemoryVault />;
-      case 'creative': return <CreativeStudio />;
-      case 'pricing': return <PricingView />;
-      case 'mastery': return <FlashcardMode />;
-      case 'video': return <VideoMode />;
-      case 'github': return <GithubMode />;
+      case 'dashboard': return withMobileHeader(<HomeDashboard onViewChange={handleViewChange} onActivateCare={handleActivateCare} />, "Dashboard");
+      case 'student': return withMobileHeader(<StudentMode />, "Tutor");
+      case 'code': return withMobileHeader(<CodeMode />, "Code Architect");
+      case 'live': return withMobileHeader(<LiveMode personalization={personalization} />, "Live Studio");
+      case 'exam': return withMobileHeader(<ExamMode />, "Exam Prep");
+      case 'analytics': return withMobileHeader(<AnalyticsDashboard />, "Analytics");
+      case 'planner': return withMobileHeader(<StudyPlanner />, "Study Planner");
+      case 'about': return withMobileHeader(<AboutPage />, "About Zara");
+      case 'workspace': return withMobileHeader(<ImageMode />, "Image Studio");
+      case 'builder': return withMobileHeader(<AppBuilderMode />, "App Builder");
+      case 'notes': return withMobileHeader(<NotesVault onStartChat={(ctx) => { handleSendMessage(ctx, []); handleViewChange('chat'); }} />, "Notes Vault");
+      case 'life-os': return withMobileHeader(<LifeOS />, "LifeOS");
+      case 'skills': return withMobileHeader(<SkillOS />, "SkillOS");
+      case 'memory': return withMobileHeader(<MemoryVault />, "Memory Vault");
+      case 'creative': return withMobileHeader(<CreativeStudio />, "Creative Studio");
+      case 'pricing': return withMobileHeader(<PricingView />, "Pricing");
+      case 'mastery': return withMobileHeader(<FlashcardMode />, "Flashcards");
+      case 'video': return withMobileHeader(<VideoMode />, "Video Studio");
+      case 'github': return withMobileHeader(<GithubMode />, "GitHub Architect");
       case 'chat':
       default:
         const fs = personalization.fontSize === 'large' ? 'text-lg' : personalization.fontSize === 'small' ? 'text-sm' : 'text-base';
         return (
-          <div className={`flex-1 flex flex-col h-full relative ${fs} transition-all duration-500 ${chatConfig.isEmotionalMode ? 'bg-gradient-to-b from-violet-50 to-indigo-50 dark:from-violet-950/20 dark:to-indigo-950/20' : ''} animate-fade-in`}>
-            {/* Unified Header with Sidebar Toggle Removed */}
-            <header className="flex items-center justify-between px-4 py-3 bg-background/50 backdrop-blur-sm border-b border-white/5 z-30 sticky top-0 transition-transform duration-300">
-               <div className="flex items-center gap-3">
+          <div className={`flex-1 flex flex-col h-full relative ${fs} transition-all duration-500 animate-fade-in ${chatConfig.isEmotionalMode ? 'bg-[#0f0821]' : ''}`}>
+            <header className="flex items-center justify-between px-4 py-3 bg-background/50 backdrop-blur-sm border-b border-white/5 z-30 sticky top-0">
+               <div className="flex items-center gap-2 md:gap-3">
+                  <MobileMenuToggle />
                   <ChatControls 
                     config={chatConfig} setConfig={setChatConfig} 
                     currentSession={currentSession}
                   />
                </div>
                
-               <div className="flex items-center gap-1 md:gap-4">
-                  {/* Emotional Mode Button */}
+               <div className="flex items-center gap-1">
                   <button
                     onClick={() => setChatConfig(prev => ({ ...prev, isEmotionalMode: !prev.isEmotionalMode }))}
-                    className={`p-2 rounded-full transition-all ${
+                    className={`p-2 rounded-full transition-all duration-300 ${
                       chatConfig.isEmotionalMode 
-                        ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30 shadow-[0_0_15px_rgba(139,92,246,0.3)] animate-pulse' 
-                        : 'text-text-sub hover:bg-surfaceHighlight hover:text-violet-400'
+                        ? 'bg-[#1a1033] text-purple-400 shadow-lg border border-purple-500/20' 
+                        : 'text-text-sub hover:bg-surfaceHighlight hover:text-purple-400'
                     }`}
-                    title="Toggle Emotional Support Mode"
+                    title="Emotional Support Mode"
                   >
                     <Heart className={`w-5 h-5 ${chatConfig.isEmotionalMode ? 'fill-current' : ''}`} />
                   </button>
 
-                  <div className="flex items-center gap-2 text-text-sub">
-                    <button className="hidden md:block p-2 hover:bg-surfaceHighlight rounded-lg transition-colors"><Globe className="w-5 h-5 hover:animate-spin" /></button>
-                  </div>
+                  <button
+                    onClick={() => setChatConfig(prev => ({ ...prev, useGrounding: !prev.useGrounding }))}
+                    className={`p-2 rounded-full transition-all ${
+                      chatConfig.useGrounding 
+                        ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.3)]' 
+                        : 'text-text-sub hover:bg-surfaceHighlight hover:text-blue-400'
+                    }`}
+                    title={chatConfig.useGrounding ? "Disable Google Search" : "Enable Google Search"}
+                  >
+                    <Globe className={`w-5 h-5 ${chatConfig.useGrounding ? 'fill-current' : ''}`} />
+                  </button>
 
-                  {/* Export Button */}
                   {currentSession && (
                     <div className="relative">
                        <button 
@@ -259,7 +324,6 @@ const App: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Thinking Button - Moved to Rightmost Position */}
                   <button
                     onClick={() => setChatConfig(prev => ({ ...prev, useThinking: !prev.useThinking }))}
                     className={`p-2 rounded-full transition-all ${
@@ -279,67 +343,72 @@ const App: React.FC = () => {
                 const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
                 shouldAutoScrollRef.current = scrollHeight - scrollTop - clientHeight < 100;
               }
-            }} className="flex-1 overflow-y-auto px-4 md:px-0">
+            }} className="flex-1 overflow-y-auto px-4 md:px-0 scroll-smooth">
               <div className="max-w-3xl mx-auto h-full flex flex-col">
                 {messages.length === 0 ? (
                   <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-                     {/* Branding Section with Interactive Flip Animation */}
-                     <div 
-                        onClick={() => {
-                           setIsFlipping(true);
-                           setTimeout(() => setIsFlipping(false), 1000);
-                        }}
-                        className={`w-24 h-24 border rounded-[2rem] flex items-center justify-center mb-8 shadow-2xl relative overflow-hidden group transition-all duration-500 cursor-pointer ${isFlipping ? 'animate-flip-3d' : 'animate-float'} ${chatConfig.isEmotionalMode ? 'bg-violet-500/10 border-violet-500/20' : 'bg-surfaceHighlight/50 border-white/10'}`}
-                     >
-                        <div className={`absolute inset-0 bg-gradient-to-br to-transparent ${chatConfig.isEmotionalMode ? 'from-violet-500/20' : 'from-purple-500/20'} animate-shimmer`} />
-                        {chatConfig.isEmotionalMode ? (
-                           <Heart className="w-12 h-12 text-violet-500 fill-violet-500/20 relative z-10 animate-pulse" />
-                        ) : (
-                           <Sparkles className="w-12 h-12 text-primary relative z-10" />
-                        )}
-                     </div>
-                     
-                     <div className="mb-12 animate-slide-up">
-                        <h2 className="text-xl font-medium text-text-sub mb-1">Hello, I'm</h2>
-                        <h1 className={`text-6xl font-black mb-6 tracking-tight bg-clip-text text-transparent ${chatConfig.isEmotionalMode ? 'bg-gradient-to-r from-violet-400 to-fuchsia-500' : 'bg-gradient-to-r from-purple-400 to-indigo-400'}`}>
-                           {chatConfig.isEmotionalMode ? 'Zara Care' : 'Zara AI'}
-                        </h1>
-                        <p className="text-lg text-text-sub/80">
-                           {chatConfig.isEmotionalMode ? "I'm listening. How are you feeling?" : "What would you like to do?"}
-                        </p>
-                     </div>
+                     {chatConfig.isEmotionalMode ? (
+                        <div className="animate-fade-in flex flex-col items-center w-full max-w-lg">
+                           <div className="w-28 h-28 rounded-[2rem] bg-[#1a1033] border border-purple-500/20 flex items-center justify-center mb-10 shadow-2xl relative">
+                              <Heart className="w-14 h-14 text-purple-400 fill-purple-400/20" />
+                              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent rounded-[2rem]" />
+                           </div>
+                           
+                           <div className="mb-14 animate-slide-up">
+                              <h2 className="text-xl font-medium text-text-sub/60 mb-1">Hello, I'm</h2>
+                              <h1 className="text-7xl font-bold mb-8 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-400 to-white">
+                                 Zara Care
+                              </h1>
+                              <p className="text-xl text-text font-medium opacity-90">
+                                 I'm listening. How are you feeling?
+                              </p>
+                           </div>
 
-                     {/* Action Cards - Hidden in Emotional Mode to focus on convo */}
-                     {!chatConfig.isEmotionalMode && (
-                       <div className="w-full max-w-sm space-y-4 animate-slide-up delay-100">
-                          <button 
-                             onClick={() => handleViewChange('builder')}
-                             className="w-full glass-panel p-5 rounded-2xl flex items-center gap-5 hover:bg-white/5 transition-all text-left group hover:scale-[1.02] duration-300"
-                          >
-                             <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
-                                <Hammer className="w-6 h-6" />
-                             </div>
-                             <div>
-                                <h3 className="font-bold text-lg text-text">App Builder</h3>
-                                <p className="text-[10px] font-black text-text-sub uppercase tracking-[0.2em]">FULL STACK</p>
-                             </div>
-                          </button>
+                           <div className="mt-8">
+                              <div className="flex items-center gap-2 px-5 py-2.5 bg-[#120b24] text-purple-400 rounded-full border border-purple-500/30 shadow-lg shadow-purple-500/5">
+                                 <Heart className="w-4 h-4 fill-current" />
+                                 <span className="text-xs font-bold tracking-wide">Emotional Support Active</span>
+                              </div>
+                           </div>
+                        </div>
+                     ) : (
+                        <>
+                           <div 
+                              onClick={() => {
+                                 setIsFlipping(true);
+                                 setTimeout(() => setIsFlipping(false), 1000);
+                              }}
+                              className={`w-24 h-24 border rounded-[2rem] flex items-center justify-center mb-8 shadow-2xl relative overflow-hidden group transition-all duration-500 cursor-pointer bg-surfaceHighlight/50 border-white/10 ${isFlipping ? 'animate-flip-3d' : 'animate-float'}`}
+                           >
+                              <div className={`absolute inset-0 bg-gradient-to-br from-purple-500/20 to-transparent animate-shimmer`} />
+                              <Sparkles className="w-12 h-12 text-primary relative z-10" />
+                           </div>
+                           
+                           <div className="mb-12 animate-slide-up">
+                              <h2 className="text-xl font-medium text-text-sub mb-1">Hello, I'm</h2>
+                              <h1 className={`text-6xl font-black mb-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-indigo-400`}>
+                                 Zara AI
+                              </h1>
+                              <p className="text-lg text-text-sub/80">
+                                 What would you like to do?
+                              </p>
+                           </div>
 
-                          <button 
-                             onClick={() => {
-                                setChatConfig(prev => ({ ...prev, isEmotionalMode: true }));
-                             }}
-                             className="w-full glass-panel p-5 rounded-2xl flex items-center gap-5 hover:bg-white/5 transition-all text-left group hover:scale-[1.02] duration-300"
-                          >
-                             <div className="w-12 h-12 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-500 group-hover:scale-110 transition-transform">
-                                <Heart className="w-6 h-6" />
-                             </div>
-                             <div>
-                                <h3 className="font-bold text-lg text-text">Emotional Support</h3>
-                                <p className="text-[10px] font-black text-text-sub uppercase tracking-[0.2em]">WELL-BEING</p>
-                             </div>
-                          </button>
-                       </div>
+                           <div className="w-full max-w-sm space-y-4 animate-slide-up delay-100">
+                              <button 
+                                 onClick={() => handleViewChange('builder')}
+                                 className="w-full glass-panel p-5 rounded-2xl flex items-center gap-5 hover:bg-white/5 transition-all text-left group hover:scale-[1.02] duration-300"
+                              >
+                                 <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
+                                    <Hammer className="w-6 h-6" />
+                                 </div>
+                                 <div>
+                                    <h3 className="font-bold text-lg text-text">App Builder</h3>
+                                    <p className="text-[10px] font-black text-text-sub uppercase tracking-[0.2em]">FULL STACK</p>
+                                 </div>
+                              </button>
+                           </div>
+                        </>
                      )}
                   </div>
                 ) : (
@@ -356,12 +425,12 @@ const App: React.FC = () => {
               onSendMessage={handleSendMessage} onStop={() => { abortRef.current = true; setIsLoading(false); }}
               isLoading={isLoading} disabled={false} isOffline={!isOnline} editMessage={editingMessage}
               onCancelEdit={() => setEditingMessage(null)} viewMode={currentView}
-              isEmotionalMode={chatConfig.isEmotionalMode} // Pass the mode
+              isEmotionalMode={chatConfig.isEmotionalMode}
             />
           </div>
         );
     }
-  }, [currentView, handleViewChange, messages, isLoading, isOnline, editingMessage, personalization, chatConfig, sessions, currentSessionId, isFlipping, showExportMenu]);
+  }, [currentView, handleViewChange, handleActivateCare, messages, isLoading, isOnline, editingMessage, personalization, chatConfig, sessions, currentSessionId, isFlipping, showExportMenu, handleSecurityAction]);
 
   return (
     <div className={`flex h-screen bg-background overflow-hidden text-text font-sans transition-all duration-300 ${systemConfig.density === 'compact' ? 'text-sm' : ''}`}>
@@ -371,11 +440,10 @@ const App: React.FC = () => {
         onSelectSession={(id) => { setMessages(loadSession(id)); handleViewChange('chat'); }} onRenameSession={renameSession}
         onDeleteSession={(id) => { deleteSession(id); if (currentSessionId === id) setMessages([]); }} onOpenFeedback={() => setIsFeedbackOpen(true)}
       />
-      <div className="flex-1 flex flex-col h-full relative w-full">
+      <div className="flex-1 flex flex-col h-full relative w-full overflow-hidden">
         {!isOnline && <div className="bg-orange-500 text-white text-[10px] font-black py-1 px-4 text-center z-50 uppercase tracking-widest animate-slide-in-right">OFFLINE MODE</div>}
-        {/* Main Content Area with Key-Based Transition Trigger */}
         <main className="flex-1 overflow-hidden relative flex flex-col key-transition-wrapper">
-           <div key={currentView} className="h-full w-full animate-fade-in">
+           <div key={currentView} className="h-full w-full animate-fade-in overflow-hidden flex flex-col">
               {currentContent}
            </div>
         </main>

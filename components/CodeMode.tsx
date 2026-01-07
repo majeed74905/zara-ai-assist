@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Code2, Bug, Zap, Book, Loader2, Play, Sparkles } from 'lucide-react';
+import { Code2, Bug, Zap, Book, Loader2, Play, Sparkles, FlaskConical, ShieldCheck } from 'lucide-react';
 import { generateCodeAssist } from '../services/gemini';
 import { detectLanguage } from '../services/languageDetector';
 import ReactMarkdown from 'react-markdown';
@@ -10,9 +10,8 @@ export const CodeMode: React.FC = () => {
   const [detectedLanguage, setDetectedLanguage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState('');
-  const [activeTask, setActiveTask] = useState<'debug' | 'explain' | 'optimize' | 'generate'>('debug');
+  const [activeTask, setActiveTask] = useState<'debug' | 'explain' | 'optimize' | 'generate' | 'test'>('debug');
 
-  // Background Language Detection
   useEffect(() => {
     if (inputCode.trim().length > 5) {
       const detected = detectLanguage(inputCode);
@@ -26,7 +25,6 @@ export const CodeMode: React.FC = () => {
     if (!inputCode) return;
     setLoading(true);
     try {
-      // Use the detected language, or fall back to a generic term if detection failed
       const langToUse = detectedLanguage || 'the provided';
       const content = await generateCodeAssist(inputCode, activeTask, langToUse);
       setResult(content);
@@ -41,6 +39,7 @@ export const CodeMode: React.FC = () => {
     { id: 'explain', label: 'Explain', icon: Book },
     { id: 'optimize', label: 'Optimize', icon: Zap },
     { id: 'generate', label: 'Generate', icon: Code2 },
+    { id: 'test', label: 'Test Lab', icon: FlaskConical },
   ];
 
   return (
@@ -50,7 +49,7 @@ export const CodeMode: React.FC = () => {
           <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-2">
             Code Architect
           </h2>
-          <p className="text-text-sub">Intelligent analysis and generation with zero configuration.</p>
+          <p className="text-text-sub">Intelligent analysis, testing, and generation with zero configuration.</p>
         </div>
         
         {detectedLanguage && (
@@ -86,15 +85,16 @@ export const CodeMode: React.FC = () => {
             <textarea
               value={inputCode}
               onChange={(e) => setInputCode(e.target.value)}
-              placeholder={activeTask === 'generate' ? "Describe the logic or paste existing code to modify..." : "Paste your code here. Zara will detect the language automatically."}
+              placeholder={activeTask === 'test' ? "Paste code to generate unit tests and reliability analysis..." : activeTask === 'generate' ? "Describe the logic or paste code to modify..." : "Paste your code here."}
               className="flex-1 bg-background rounded-lg p-4 font-mono text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary/50 text-text border border-border custom-scrollbar"
               spellCheck={false}
             />
             
             <div className="mt-4 flex justify-between items-center">
-              <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-green-500 opacity-50" />
                 <span className="text-[10px] text-text-sub font-mono opacity-50 uppercase tracking-tighter">
-                   Source Intelligence Engine Active
+                   Reliability Engine Active
                 </span>
               </div>
               <button
@@ -109,23 +109,23 @@ export const CodeMode: React.FC = () => {
           </div>
         </div>
 
-        <div className="glass-panel p-6 rounded-xl overflow-y-auto min-h-[400px] markdown-body custom-scrollbar relative">
+        <div className="glass-panel p-6 rounded-xl overflow-y-auto min-h-[400px] markdown-body custom-scrollbar relative bg-black/20">
           {result ? (
             <ReactMarkdown>{result}</ReactMarkdown>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-text-sub/30">
               <div className="w-20 h-20 bg-surfaceHighlight rounded-3xl flex items-center justify-center mb-6">
-                <Code2 className="w-10 h-10 opacity-50" />
+                <FlaskConical className="w-10 h-10 opacity-50" />
               </div>
-              <p className="text-lg font-medium">Architectural Analysis</p>
-              <p className="text-sm mt-2 max-w-xs text-center">Output will appear here after analysis. No manual configuration required.</p>
+              <p className="text-lg font-medium">Test & Analysis Output</p>
+              <p className="text-sm mt-2 max-w-xs text-center">Results will appear here after analysis. Zara Pro model is used for deep reasoning.</p>
             </div>
           )}
           {loading && (
              <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] flex items-center justify-center z-10">
                 <div className="flex flex-col items-center gap-2">
                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                   <span className="text-xs font-bold text-primary animate-pulse uppercase tracking-widest">Processing {detectedLanguage || 'Code'}...</span>
+                   <span className="text-xs font-bold text-primary animate-pulse uppercase tracking-widest">Architectural Check...</span>
                 </div>
              </div>
           )}

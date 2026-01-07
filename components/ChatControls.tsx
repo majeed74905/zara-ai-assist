@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, UserCircle } from 'lucide-react';
 import { ChatConfig, GeminiModel, Persona, ChatSession } from '../types';
@@ -34,7 +35,7 @@ export const ChatControls: React.FC<ChatControlsProps> = ({ config, setConfig, c
           onChange={handleModelChange}
           className="appearance-none bg-surfaceHighlight border border-white/10 text-text text-sm font-medium rounded-full pl-4 pr-10 py-2 focus:outline-none cursor-pointer hover:bg-surface transition-all shadow-sm"
         >
-          <option value="gemini-2.5-flash">Zara Fast (Default)</option>
+          <option value="gemini-3-flash-preview">Zara Fast</option>
           <option value="gemini-3-pro-preview">Zara Pro</option>
           <option value="gemini-flash-lite-latest">Zara Eco</option>
         </select>

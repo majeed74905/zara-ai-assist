@@ -2,53 +2,53 @@
 import { ThemeConfig, ThemeName } from './types';
 
 export const THEMES: Record<ThemeName, ThemeConfig> = {
-  light: {
-    name: 'light',
-    label: 'Light Mode',
-    description: 'Clean, high-contrast, professional.',
+  dark: {
+    name: 'dark',
+    label: 'Violet Dark',
+    description: 'Deep purple workspace.',
     colors: {
-      background: '#F3F4F6', // Gray 100
-      surface: '#FFFFFF',
-      surfaceHighlight: '#F9FAFB', // Gray 50
-      textMain: '#030712', // Gray 950
-      textSub: '#4B5563', // Gray 600
+      background: '#0B0214', // Very deep violet/black
+      surface: '#17082A', // Dark violet surface
+      surfaceHighlight: '#261042', // Lighter violet highlight
+      textMain: '#F3E8FF', // Lavender white
+      textSub: '#A78BFA', // Muted violet
       primary: '#8B5CF6', // Violet 500
       primaryDark: '#7C3AED',
       accent: '#D946EF', // Fuchsia
-      border: 'rgba(0, 0, 0, 0.1)',
+      border: 'rgba(139, 92, 246, 0.15)', // Violet border
     },
-    gradientOverlay: 'radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.05) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(217, 70, 239, 0.05) 0%, transparent 40%)'
+    gradientOverlay: 'radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.08) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(217, 70, 239, 0.08) 0%, transparent 40%)'
   },
-  dark: {
-    name: 'dark',
-    label: 'Dark Mode',
-    description: 'Easy on the eyes, classic dark interface.',
+  light: {
+    name: 'light',
+    label: 'Violet Light',
+    description: 'Clean lavender aesthetics.',
     colors: {
-      background: '#09090B', // Zinc 950
-      surface: '#18181B', // Zinc 900
-      surfaceHighlight: '#27272A', // Zinc 800
-      textMain: '#FAFAFA', // Zinc 50
-      textSub: '#A1A1AA', // Zinc 400
-      primary: '#8B5CF6',
-      primaryDark: '#7C3AED',
-      accent: '#D946EF',
-      border: 'rgba(255, 255, 255, 0.15)',
+      background: '#F5F3FF', // Violet 50
+      surface: '#FFFFFF',
+      surfaceHighlight: '#EDE9FE', // Violet 100
+      textMain: '#2E1065', // Violet 950
+      textSub: '#5B21B6', // Violet 800
+      primary: '#7C3AED', // Violet 600
+      primaryDark: '#6D28D9',
+      accent: '#C026D3', // Fuchsia
+      border: 'rgba(124, 58, 237, 0.15)',
     },
-    gradientOverlay: 'radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.05) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(217, 70, 239, 0.05) 0%, transparent 40%)'
+    gradientOverlay: 'radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.05) 0%, transparent 40%)'
   },
   aurora: {
     name: 'aurora',
     label: 'Aurora',
     description: 'Deep space blue with vibrant gradients.',
     colors: {
-      background: '#0F172A', // Slate 900
-      surface: '#1E293B', // Slate 800
-      surfaceHighlight: '#334155', // Slate 700
-      textMain: '#F8FAFC', // Slate 50
-      textSub: '#94A3B8', // Slate 400
-      primary: '#818CF8', // Indigo 400
+      background: '#0F172A',
+      surface: '#1E293B',
+      surfaceHighlight: '#334155',
+      textMain: '#F8FAFC',
+      textSub: '#94A3B8',
+      primary: '#818CF8',
       primaryDark: '#6366F1',
-      accent: '#2DD4BF', // Teal 400
+      accent: '#2DD4BF',
       border: 'rgba(148, 163, 184, 0.2)',
     },
     gradientOverlay: 'conic-gradient(from 0deg at 50% 50%, rgba(129, 140, 248, 0.05) 0deg, rgba(45, 212, 191, 0.05) 180deg, rgba(129, 140, 248, 0.05) 360deg)'
@@ -58,14 +58,14 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     label: 'Glassmorphism',
     description: 'Frosted, airy, modern aesthetics.',
     colors: {
-      background: '#E0F2FE', // Sky 100
+      background: '#E0F2FE',
       surface: 'rgba(255, 255, 255, 0.65)',
       surfaceHighlight: 'rgba(255, 255, 255, 0.8)',
-      textMain: '#0C4A6E', // Sky 900
-      textSub: '#0369A1', // Sky 700
-      primary: '#0EA5E9', // Sky 500
+      textMain: '#0C4A6E',
+      textSub: '#0369A1',
+      primary: '#0EA5E9',
       primaryDark: '#0284C7',
-      accent: '#F472B6', // Pink 400
+      accent: '#F472B6',
       border: 'rgba(255, 255, 255, 0.5)',
     },
     gradientOverlay: 'linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%)'
@@ -75,14 +75,14 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     label: 'Midnight',
     description: 'Ultra-dark navy for late night focus.',
     colors: {
-      background: '#020617', // Slate 950 (darker)
-      surface: '#0F172A', // Slate 900
+      background: '#020617',
+      surface: '#0F172A',
       surfaceHighlight: '#1E293B',
-      textMain: '#E2E8F0', // Slate 200
-      textSub: '#64748B', // Slate 500
-      primary: '#38BDF8', // Sky 400
+      textMain: '#E2E8F0',
+      textSub: '#64748B',
+      primary: '#38BDF8',
       primaryDark: '#0284C7',
-      accent: '#FB7185', // Rose 400
+      accent: '#FB7185',
       border: 'rgba(30, 41, 59, 0.5)',
     },
     gradientOverlay: 'none'
@@ -92,14 +92,14 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     label: 'Solarized',
     description: 'Optimized for code and high readability.',
     colors: {
-      background: '#002b36', // Base03
-      surface: '#073642', // Base02
-      surfaceHighlight: '#586e75', // Base01 (for hover)
-      textMain: '#fdf6e3', // Base3
-      textSub: '#839496', // Base0
-      primary: '#2aa198', // Cyan
-      primaryDark: '#268bd2', // Blue
-      accent: '#d33682', // Magenta
+      background: '#002b36',
+      surface: '#073642',
+      surfaceHighlight: '#586e75',
+      textMain: '#fdf6e3',
+      textSub: '#839496',
+      primary: '#2aa198',
+      primaryDark: '#268bd2',
+      accent: '#d33682',
       border: 'rgba(88, 110, 117, 0.3)',
     },
     gradientOverlay: 'none'
@@ -109,14 +109,14 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     label: 'Royal',
     description: 'Luxurious deep purple and gold.',
     colors: {
-      background: '#1a0b2e', // Deep purple
+      background: '#1a0b2e',
       surface: '#2d1b4e',
       surfaceHighlight: '#43237a',
-      textMain: '#fae8ff', // Purple 50
-      textSub: '#d8b4fe', // Purple 300
-      primary: '#fbbf24', // Amber 400 (Gold)
+      textMain: '#fae8ff',
+      textSub: '#d8b4fe',
+      primary: '#fbbf24',
       primaryDark: '#d97706',
-      accent: '#f472b6', // Pink 400
+      accent: '#f472b6',
       border: 'rgba(251, 191, 36, 0.15)',
     },
     gradientOverlay: 'radial-gradient(circle at top right, rgba(251, 191, 36, 0.1), transparent 50%)'
@@ -126,14 +126,14 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     label: 'Pastel',
     description: 'Soft, calming colors.',
     colors: {
-      background: '#fdf2f8', // Pink 50
-      surface: '#fff1f2', // Rose 50
-      surfaceHighlight: '#ffe4e6', // Rose 100
-      textMain: '#881337', // Rose 900
-      textSub: '#9f1239', // Rose 800
-      primary: '#f43f5e', // Rose 500
+      background: '#fdf2f8',
+      surface: '#fff1f2',
+      surfaceHighlight: '#ffe4e6',
+      textMain: '#881337',
+      textSub: '#9f1239',
+      primary: '#f43f5e',
       primaryDark: '#e11d48',
-      accent: '#14b8a6', // Teal 500
+      accent: '#14b8a6',
       border: 'rgba(244, 63, 94, 0.1)',
     },
     gradientOverlay: 'linear-gradient(to right, #ffdde1, #ee9ca7)'

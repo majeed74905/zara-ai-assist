@@ -1,38 +1,78 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Github, Search, BookOpen, Code, Loader2, GitBranch, FileText, Database, Layers, Workflow, Copy, Check, Sparkles, AlertCircle, Download, File, Folder, X, Filter } from 'lucide-react';
+import { Github, Search, BookOpen, Code, Loader2, GitBranch, FileText, Database, Layers, Workflow, Copy, Check, Sparkles, AlertCircle, Download, File, Folder, X, Filter, AlertTriangle } from 'lucide-react';
 import { analyzeGithubRepo } from '../services/gemini';
 import ReactMarkdown from 'react-markdown';
 import mermaid from 'mermaid';
+import { useTheme } from '../theme/ThemeContext';
+
+/**
+ * Sanitizes AI-generated Mermaid code to prevent parse errors.
+ */
+const sanitizeMermaid = (code: string): string => {
+  let sanitized = code.trim();
+  
+  // 1. Fix unquoted labels on arrows that start with numbers (common hallucination)
+  sanitized = sanitized.replace(/--\s*([^"\s][^->\n]*?)\s*-->/g, '-- "$1" -->');
+  
+  // 2. Fix double brackets
+  sanitized = sanitized.replace(/\[\[(.*?)\]\]/g, '["$1"]');
+  
+  // 3. Ensure node labels with special characters are quoted
+  sanitized = sanitized.replace(/(\w+)\[(.*?)\]/g, (match, id, label) => {
+    if (!label.startsWith('"')) return `${id}["${label}"]`;
+    return match;
+  });
+
+  return sanitized;
+};
 
 // --- Mermaid Component for Architectural Visualization ---
 const MermaidDiagram = ({ code }: { code: string }) => {
   const [svg, setSvg] = useState('');
-  const idRef = useRef(`mermaid-${Math.random().toString(36).substr(2, 9)}`);
+  const [error, setError] = useState<string | null>(null);
+  const [isRendering, setIsRendering] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const { currentThemeName } = useTheme();
+  const renderId = useRef(0);
 
   useEffect(() => {
+    const isDark = !['light', 'glass', 'pastel'].includes(currentThemeName);
+    
+    // Configure mermaid - Removed "Inter" to prevent canvas export SecurityError
     mermaid.initialize({ 
         startOnLoad: false, 
-        theme: 'dark',
+        theme: isDark ? 'dark' : 'default',
         securityLevel: 'loose',
-        fontFamily: 'Inter, sans-serif'
+        fontFamily: 'sans-serif'
     });
     
     const renderDiagram = async () => {
+      const sanitizedCode = sanitizeMermaid(code);
+      if (!sanitizedCode) return;
+      
+      setIsRendering(true);
+      setError(null);
+      const currentId = ++renderId.current;
+      
       try {
-        const { svg } = await mermaid.render(idRef.current, code);
-        setSvg(svg);
-      } catch (error) {
-        setSvg(`<div class="text-red-400 font-mono text-xs p-4 bg-red-500/5 border border-red-500/20 rounded-xl">
-          <strong class="text-red-500">Diagram Visualization Error:</strong><br/>
-          <pre class="whitespace-pre-wrap mt-2 opacity-70">${code}</pre>
-        </div>`);
+        const id = `mermaid-github-${crypto.randomUUID().replace(/-/g, '')}`;
+        const { svg: renderedSvg } = await mermaid.render(id, sanitizedCode);
+        
+        if (currentId === renderId.current) {
+          setSvg(renderedSvg);
+          setIsRendering(false);
+        }
+      } catch (err) {
+        if (currentId === renderId.current) {
+          setError((err as any).message || 'Syntax Error');
+          setIsRendering(false);
+        }
       }
     };
     renderDiagram();
-  }, [code]);
+  }, [code, currentThemeName]);
 
   const handleDownload = async () => {
     if (!containerRef.current) return;
@@ -41,12 +81,15 @@ const MermaidDiagram = ({ code }: { code: string }) => {
 
     setIsExporting(true);
     try {
-      const svgData = new XMLSerializer().serializeToString(svgElement);
+      const clonedSvg = svgElement.cloneNode(true) as SVGSVGElement;
+      clonedSvg.setAttribute('style', 'background-color: transparent; font-family: sans-serif;');
+
+      const svgData = new XMLSerializer().serializeToString(clonedSvg);
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       const img = new Image();
 
-      const scale = 3;
+      const scale = 2;
       const bcr = svgElement.getBoundingClientRect();
       const width = bcr.width || 1200;
       const height = bcr.height || 800;
@@ -54,27 +97,33 @@ const MermaidDiagram = ({ code }: { code: string }) => {
       canvas.width = width * scale;
       canvas.height = height * scale;
 
-      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(svgBlob);
+      const base64Svg = btoa(unescape(encodeURIComponent(svgData)));
+      const dataUrl = `data:image/svg+xml;base64,${base64Svg}`;
 
+      img.crossOrigin = "anonymous";
       img.onload = () => {
         if (!ctx) return;
-        ctx.fillStyle = '#09090b'; 
+        const isDark = !['light', 'glass', 'pastel'].includes(currentThemeName);
+        ctx.fillStyle = isDark ? '#09090b' : '#ffffff'; 
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.scale(scale, scale);
         ctx.drawImage(img, 0, 0, width, height);
         
-        const pngUrl = canvas.toDataURL('image/png', 1.0);
-        const downloadLink = document.createElement('a');
-        downloadLink.href = pngUrl;
-        downloadLink.download = `architecture-${Date.now()}.png`;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
-        URL.revokeObjectURL(url);
+        try {
+          const pngUrl = canvas.toDataURL('image/png', 1.0);
+          const downloadLink = document.createElement('a');
+          downloadLink.href = pngUrl;
+          downloadLink.download = `architecture-${Date.now()}.png`;
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          document.body.removeChild(downloadLink);
+        } catch (e) {
+          console.error("Blueprint export failed:", e);
+          alert("Export failed due to browser security restrictions.");
+        }
         setIsExporting(false);
       };
-      img.src = url;
+      img.src = dataUrl;
     } catch (err) {
       console.error("Export failed", err);
       setIsExporting(false);
@@ -85,22 +134,36 @@ const MermaidDiagram = ({ code }: { code: string }) => {
     <div className="my-8 overflow-hidden rounded-2xl bg-surfaceHighlight/50 border border-white/10 shadow-2xl backdrop-blur-sm">
         <div className="flex items-center justify-between px-4 py-3 bg-surfaceHighlight border-b border-white/5">
             <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">System Architecture</span>
+                <div className={`w-2.5 h-2.5 rounded-full ${error ? 'bg-red-500' : 'bg-indigo-500 animate-pulse'}`} />
+                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">System Architecture Blueprint</span>
             </div>
             <button 
               onClick={handleDownload}
-              disabled={isExporting}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[9px] font-black text-indigo-400 hover:bg-white/5 transition-all border border-indigo-500/20 disabled:opacity-50 tracking-widest"
+              disabled={isExporting || isRendering || !!error}
+              className="flex items-center gap-2 px-3 py-1 rounded-lg text-[9px] font-black text-indigo-400 hover:bg-indigo-500/10 transition-all border border-indigo-500/20 disabled:opacity-50 tracking-widest"
             >
-              {isExporting ? "EXPORTING..." : <><Download className="w-3 h-3" /> DOWNLOAD HD</>}
+              {isExporting ? "EXPORTING..." : <><Download className="w-3 h-3" /> EXPORT HD PNG</>}
             </button>
         </div>
-        <div 
-          ref={containerRef}
-          className="p-8 flex justify-center overflow-x-auto custom-scrollbar" 
-          dangerouslySetInnerHTML={{ __html: svg }} 
-        />
+        <div className="p-8 flex justify-center overflow-x-auto custom-scrollbar min-h-[150px]">
+            {error ? (
+                <div className="flex items-center gap-3 p-4 bg-red-500/10 rounded-xl border border-red-500/20 text-red-500">
+                    <AlertTriangle className="w-5 h-5" />
+                    <span className="text-xs font-mono">{error}</span>
+                </div>
+            ) : isRendering ? (
+                <div className="flex items-center gap-3 py-10 opacity-40">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <span className="text-xs font-black uppercase tracking-[0.2em]">Deconstructing Logic...</span>
+                </div>
+            ) : (
+                <div 
+                  ref={containerRef}
+                  className="w-full flex justify-center"
+                  dangerouslySetInnerHTML={{ __html: svg }} 
+                />
+            )}
+        </div>
     </div>
   );
 };
@@ -335,7 +398,7 @@ export const GithubMode: React.FC = () => {
              )}
           </div>
 
-          {/* Right: Interactive File Explorer (Visible only after fetch) */}
+          {/* Right: Interactive File Explorer */}
           {(fileList.length > 0 || isLoading) && (
             <div className="w-full lg:w-[350px] glass-panel rounded-[2rem] border border-white/5 bg-black/30 flex flex-col overflow-hidden animate-fade-in">
               <div className="p-6 border-b border-white/5 bg-white/5 flex flex-col gap-4 flex-shrink-0">

@@ -1,30 +1,13 @@
+
 export enum Role {
   USER = 'user',
   MODEL = 'model',
 }
 
 export type ViewMode = 
-  | 'chat' 
-  | 'student' 
-  | 'code' 
-  | 'live' 
-  | 'workspace' 
-  | 'settings' 
-  | 'exam' 
-  | 'analytics' 
-  | 'planner' 
-  | 'mastery' 
-  | 'notes' 
-  | 'about' 
-  | 'builder'
-  | 'dashboard'
-  | 'life-os'
-  | 'skills'
-  | 'memory'
-  | 'creative'
-  | 'pricing'
-  | 'video'
-  | 'github';
+  | 'chat' | 'student' | 'code' | 'live' | 'workspace' | 'settings' | 'exam' 
+  | 'analytics' | 'planner' | 'mastery' | 'notes' | 'about' | 'builder'
+  | 'dashboard' | 'life-os' | 'skills' | 'memory' | 'creative' | 'pricing' | 'video' | 'github';
 
 export interface Attachment {
   id: string;
@@ -39,17 +22,7 @@ export interface Source {
   uri: string;
 }
 
-export interface MediaAction {
-  action: 'PLAY_MEDIA';
-  media_type: 'song' | 'video' | 'playlist' | 'podcast';
-  title: string;
-  artist?: string;
-  platform: 'youtube' | 'spotify';
-  url: string;
-  embedUrl?: string;
-  query: string;
-}
-
+// Added isOffline to Message interface
 export interface Message {
   id: string;
   role: Role;
@@ -59,9 +32,7 @@ export interface Message {
   timestamp: number;
   isError?: boolean;
   isStreaming?: boolean;
-  isPinned?: boolean;
   isOffline?: boolean;
-  mediaAction?: MediaAction;
 }
 
 export interface GeneratedFile {
@@ -71,46 +42,29 @@ export interface GeneratedFile {
   language: string;
 }
 
-export interface ChatSession {
+export type VFS = Record<string, string>;
+
+export interface AppProject {
   id: string;
-  title: string;
-  messages: Message[];
+  name: string;
+  vfs: VFS;
+  createdAt: number;
   updatedAt: number;
 }
-
-export interface StudentConfig {
-  topic: string;
-  mode: 'summary' | 'mcq' | '5mark' | '20mark' | 'simple';
-  mcqConfig?: {
-    count: number;
-    difficulty: 'Easy' | 'Medium' | 'Hard';
-  };
-  studyMaterial?: string;
-  attachments?: Attachment[];
-}
-
-export interface CodeConfig {
-  language: string;
-  task: 'debug' | 'explain' | 'optimize' | 'generate';
-}
-
-export type GeminiModel = 'gemini-2.5-flash' | 'gemini-3-pro-preview' | 'gemini-flash-lite-latest';
-export type AppLanguage = 'English' | 'Tamil' | 'Tanglish';
 
 export interface Persona {
   id: string;
   name: string;
   description: string;
   systemPrompt: string;
-  isDefault?: boolean;
 }
 
 export interface ChatConfig {
-  model: GeminiModel;
+  model: string;
   useThinking: boolean;
   useGrounding: boolean;
-  isEmotionalMode: boolean; // New Feature: Emotional Support Mode
   activePersonaId?: string;
+  isEmotionalMode?: boolean;
 }
 
 export interface PersonalizationConfig {
@@ -119,6 +73,7 @@ export interface PersonalizationConfig {
   aboutYou: string;
   customInstructions: string;
   fontSize: 'small' | 'medium' | 'large';
+  isVerifiedCreator?: boolean;
 }
 
 export interface SystemConfig {
@@ -126,121 +81,6 @@ export interface SystemConfig {
   enableAnimations: boolean;
   density: 'comfortable' | 'compact';
   soundEffects: boolean;
-}
-
-export interface PromptTemplate {
-  id: string;
-  label: string;
-  prompt: string;
-  category?: string;
-}
-
-export interface SavedPrompt {
-  id: string;
-  title: string;
-  content: string;
-  category: string;
-}
-
-export type MemoryCategory = 'core' | 'preference' | 'project' | 'emotional' | 'fact';
-
-export interface MemoryNode {
-  id: string;
-  content: string;
-  category: MemoryCategory;
-  tags: string[];
-  confidence: number;
-  timestamp: number;
-}
-
-export type ExamType = 'Quiz' | 'Unit Test' | 'Semester';
-export type ExamDifficulty = 'Easy' | 'Medium' | 'Hard' | 'Mixed';
-export type QuestionType = 'MCQ' | 'SHORT' | 'LONG';
-
-export interface ExamConfig {
-  subject: string;
-  examType: ExamType;
-  difficulty: ExamDifficulty;
-  language: AppLanguage;
-  questionCount: number;
-  includeTheory: boolean;
-  durationMinutes: number;
-}
-
-export interface ExamQuestion {
-  id: number;
-  type: QuestionType;
-  text: string;
-  options?: string[];
-  correctAnswer: string;
-  marks: number;
-}
-
-export interface ExamAnswer {
-  questionId: number;
-  userAnswer: string;
-  isEvaluated: boolean;
-  score: number;
-  feedback?: string;
-}
-
-export interface ExamSession {
-  id: string;
-  config: ExamConfig;
-  questions: ExamQuestion[];
-  answers: Record<number, ExamAnswer>;
-  createdAt: number;
-  completedAt?: number;
-  isActive: boolean;
-  totalScore?: number;
-  maxScore?: number;
-}
-
-export interface DailyStats {
-  date: string;
-  messagesSent: number;
-  minutesSpent: number;
-  examsTaken: number;
-}
-
-export interface Task {
-  id: string;
-  description: string;
-  completed: boolean;
-  durationMinutes: number;
-}
-
-export interface DayPlan {
-  day: string;
-  tasks: Task[];
-}
-
-export interface StudyPlan {
-  id: string;
-  topic: string;
-  weeklySchedule: DayPlan[];
-  createdAt: number;
-  startDate: string;
-}
-
-export interface TopicMastery {
-  topic: string;
-  masteryLevel: number;
-  status: 'Novice' | 'Intermediate' | 'Expert';
-  lastPracticed: number;
-}
-
-export interface Flashcard {
-  front: string;
-  back: string;
-  mastered: boolean;
-}
-
-export interface FlashcardSet {
-  id: string;
-  topic: string;
-  cards: Flashcard[];
-  createdAt: number;
 }
 
 export interface Note {
@@ -258,4 +98,127 @@ export interface AppFeedback {
   category: string;
   text: string;
   timestamp: number;
+}
+
+export type MemoryCategory = 'fact' | 'preference' | 'project' | 'core' | 'emotional';
+
+export interface MemoryNode {
+  id: string;
+  content: string;
+  category: MemoryCategory;
+  tags: string[];
+  confidence: number;
+  timestamp: number;
+}
+
+export interface DailyStats {
+  date: string;
+  messagesSent: number;
+  minutesSpent: number;
+  examsTaken: number;
+}
+
+export interface StudentConfig {
+  topic: string;
+  mode: 'summary' | 'mcq' | '5mark' | '20mark' | 'simple';
+  mcqConfig?: { count: number; difficulty: string; };
+  studyMaterial?: string;
+  attachments?: Attachment[];
+}
+
+export interface Flashcard {
+  front: string;
+  back: string;
+  mastered: boolean;
+}
+
+export interface FlashcardSet {
+  id: string;
+  topic: string;
+  cards: Flashcard[];
+  createdAt: number;
+}
+
+export interface StudyPlan {
+  id: string;
+  topic: string;
+  weeklySchedule: any[];
+  createdAt: number;
+  startDate: string;
+}
+
+export interface ExamConfig {
+  subject: string;
+  examType: string;
+  difficulty: string;
+  language: string;
+  questionCount: number;
+  includeTheory: boolean;
+  durationMinutes: number;
+}
+
+export interface ExamQuestion {
+  id: number;
+  type: string;
+  text: string;
+  options?: string[];
+  correctAnswer: string;
+  marks: number;
+}
+
+export interface ExamSession {
+  id: string;
+  config: ExamConfig;
+  questions: ExamQuestion[];
+  answers: Record<number, any>;
+  createdAt: number;
+  completedAt?: number;
+  isActive: boolean;
+  totalScore?: number;
+  maxScore?: number;
+}
+
+export interface MediaAction {
+  action: 'PLAY_MEDIA';
+  media_type: string;
+  title: string;
+  artist?: string;
+  platform: string;
+  url: string;
+  query: string;
+}
+
+// Added Missing Exported Types
+export interface ChatSession {
+  id: string;
+  title: string;
+  messages: Message[];
+  updatedAt: number;
+}
+
+export type GeminiModel = string;
+
+export interface PromptTemplate {
+  id: string;
+  label: string;
+  prompt: string;
+}
+
+export type AppLanguage = string;
+export type ExamType = string;
+export type ExamDifficulty = string;
+
+export interface ExamAnswer {
+  questionId: number;
+  userAnswer: string;
+  isEvaluated: boolean;
+  score: number;
+  feedback?: string;
+}
+
+export interface SavedPrompt {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
 }

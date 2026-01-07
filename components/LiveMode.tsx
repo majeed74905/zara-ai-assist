@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Radio, AlertTriangle, User, Sparkles, Activity, WifiOff, X, Music, Youtube, RefreshCw, ExternalLink, Loader2 } from 'lucide-react';
+import { Mic, MicOff, Radio, AlertTriangle, User, Sparkles, Activity, WifiOff, X, Music, Youtube, RefreshCw, ExternalLink, Loader2, Key } from 'lucide-react';
 import { GoogleGenAI, Modality, LiveServerMessage } from "@google/genai";
 import { buildSystemInstruction, MEDIA_PLAYER_TOOL } from '../services/gemini';
 import { float32ToInt16, base64ToUint8Array, decodeAudioData, arrayBufferToBase64 } from '../utils/audioUtils';
@@ -22,6 +22,7 @@ export const LiveMode: React.FC<LiveModeProps> = ({ personalization }) => {
   const [volume, setVolume] = useState(0);
   const [messages, setMessages] = useState<LiveMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [showKeyPicker, setShowKeyPicker] = useState(false);
   const [mediaCard, setMediaCard] = useState<MediaAction | null>(null);
   
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
@@ -155,6 +156,15 @@ export const LiveMode: React.FC<LiveModeProps> = ({ personalization }) => {
     };
   };
 
+  const handleKeySelection = async () => {
+    if (window.aistudio && window.aistudio.openSelectKey) {
+      await window.aistudio.openSelectKey();
+      setError(null);
+      setShowKeyPicker(false);
+      connect(); // Retry after selection
+    }
+  };
+
   const connect = async () => {
     if (!navigator.onLine) {
         setError("No internet connection.");
@@ -162,20 +172,19 @@ export const LiveMode: React.FC<LiveModeProps> = ({ personalization }) => {
     }
 
     setError(null);
+    setShowKeyPicker(false);
     setIsActive(true); 
     isActiveRef.current = true;
     isUserStoppingRef.current = false;
     setStatus('Initializing...');
 
     try {
-      // 1. Audio Contexts Setup
       const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       inputAudioContextRef.current = inputCtx;
 
       const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       audioContextRef.current = outputCtx;
       
-      // Critical: AudioContext must be resumed from user gesture (already in toggleConnection)
       if (outputCtx.state === 'suspended') await outputCtx.resume();
       if (inputCtx.state === 'suspended') await inputCtx.resume();
 
@@ -190,18 +199,18 @@ export const LiveMode: React.FC<LiveModeProps> = ({ personalization }) => {
         timeStyle: 'long' 
       });
       
-      // Always instantiate directly with process.env.API_KEY
+      // Fixed: Create a new GoogleGenAI instance right before making an API call to ensure it uses the most up-to-date key
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       setStatus('Connecting...');
       
       const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+        // Updated model ID from -09-2025 to -12-2025 as per guidelines
+        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         callbacks: {
           onopen: () => {
             if (isMountedRef.current) setStatus('Online');
           },
           onmessage: async (message: LiveServerMessage) => {
-             // Handle Tool Calls
              if (message.toolCall) {
                 for (const call of message.toolCall.functionCalls) {
                    if (call.name === 'play_media') {
@@ -225,7 +234,6 @@ export const LiveMode: React.FC<LiveModeProps> = ({ personalization }) => {
                 }
              }
 
-             // Handle Audio Output
              const base64Audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
              if (base64Audio) {
                 const audioBytes = base64ToUint8Array(base64Audio);
@@ -236,7 +244,6 @@ export const LiveMode: React.FC<LiveModeProps> = ({ personalization }) => {
                    .catch(() => {});
              }
 
-             // Handle Transcription
              let role: 'user' | 'model' | null = null;
              let text = '';
              if (message.serverContent?.inputTranscription) {
@@ -257,7 +264,6 @@ export const LiveMode: React.FC<LiveModeProps> = ({ personalization }) => {
                 });
              }
 
-             // Handle Interruption
              if (message.serverContent?.interrupted) {
                 processingQueueRef.current = Promise.resolve();
                 audioQueueRef.current.forEach(s => { try { s.stop(); } catch(e) {} });
@@ -268,8 +274,15 @@ export const LiveMode: React.FC<LiveModeProps> = ({ personalization }) => {
           },
           onerror: (e: ErrorEvent) => {
              console.error("Live API Session Error:", e);
+             const errorMsg = e.message || String(e);
              if (isMountedRef.current) {
-                setError(`Connection Error: ${e.message || 'Network error'}`);
+                // Guidelines check for Requested entity was not found
+                if (errorMsg.includes("Requested entity was not found")) {
+                  setError("Model or API Key access denied. Please select a valid key.");
+                  setShowKeyPicker(true);
+                } else {
+                  setError(`Connection Error: ${errorMsg}`);
+                }
                 setStatus("Failed");
              }
              cleanup();
@@ -300,7 +313,6 @@ export const LiveMode: React.FC<LiveModeProps> = ({ personalization }) => {
 
       sessionRef.current = await sessionPromise;
 
-      // 4. Input Audio Pipeline
       const source = inputCtx.createMediaStreamSource(stream);
       const processor = inputCtx.createScriptProcessor(2048, 1, 1);
       processorRef.current = processor;
@@ -308,10 +320,8 @@ export const LiveMode: React.FC<LiveModeProps> = ({ personalization }) => {
       processor.connect(inputCtx.destination); 
 
       processor.onaudioprocess = (e) => {
-         // Guideline: Solely rely on sessionPromise resolves, do not add other condition checks.
          let inputData = e.inputBuffer.getChannelData(0);
          
-         // Non-SDK logic: Visualizer Volume
          if (isMountedRef.current) {
             let sum = 0;
             for (let i=0; i<inputData.length; i+=16) sum += inputData[i] * inputData[i];
@@ -335,8 +345,14 @@ export const LiveMode: React.FC<LiveModeProps> = ({ personalization }) => {
 
     } catch (e: any) {
       console.error("Live API Connection Failed:", e);
+      const errorMsg = e.message || String(e);
       if (isMountedRef.current) {
-         setError(`Connection Failed: ${e.message}`);
+         if (errorMsg.includes("Requested entity was not found")) {
+            setError("Requested entity was not found. This model may require a selected API key.");
+            setShowKeyPicker(true);
+         } else {
+            setError(`Connection Failed: ${errorMsg}`);
+         }
          setStatus('Failed');
       }
       cleanup();
@@ -408,6 +424,28 @@ export const LiveMode: React.FC<LiveModeProps> = ({ personalization }) => {
         </div>
       </div>
 
+      {/* Key Selection Prompt */}
+      {showKeyPicker && (
+        <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-6 animate-fade-in">
+           <div className="bg-surface border border-white/10 rounded-[2rem] p-8 max-w-sm w-full text-center shadow-2xl">
+              <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6 text-primary">
+                 <Key className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-bold mb-3">API Key Required</h3>
+              <p className="text-text-sub text-sm mb-8 leading-relaxed">
+                 To use Live Studio, you must select an API key from a paid GCP project. 
+                 <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-primary hover:underline ml-1">Learn about billing</a>
+              </p>
+              <button 
+                onClick={handleKeySelection}
+                className="w-full bg-primary hover:bg-primary-dark text-white py-4 rounded-xl font-bold transition-all shadow-lg shadow-primary/20 active:scale-95"
+              >
+                 Select API Key
+              </button>
+           </div>
+        </div>
+      )}
+
       {/* Media Card Overlay */}
       {mediaCard && isActive && (
         <div className="absolute top-4 left-4 right-4 z-50 flex justify-center animate-fade-in pointer-events-none">
@@ -464,7 +502,7 @@ export const LiveMode: React.FC<LiveModeProps> = ({ personalization }) => {
 
       {/* Footer Controls */}
       <div className="flex-shrink-0 p-6 bg-surface/30 backdrop-blur border-t border-border flex flex-col items-center gap-3">
-        {error && (
+        {error && !showKeyPicker && (
           <button onClick={() => { setError(null); connect(); }} className="flex items-center gap-2 text-xs bg-surfaceHighlight hover:bg-surface px-4 py-2 rounded-lg border border-white/10 mb-2">
             <RefreshCw className="w-3 h-3" /> Reconnect
           </button>
