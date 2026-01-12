@@ -277,7 +277,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
       </div>
       
       <div className="text-center mt-4">
-         <p className="text-[11px] text-text-sub/40 leading-relaxed px-4">
+         <p data-nosnippet className="text-[11px] text-text-sub/40 leading-relaxed px-4">
            Zara AI may display inaccurate info, including about people, so double-check its responses.
          </p>
       </div>
