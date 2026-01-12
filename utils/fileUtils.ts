@@ -26,9 +26,9 @@ export const createAttachment = async (file: File): Promise<Attachment> => {
 };
 
 export const validateFile = (file: File): string | null => {
-  const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+  const MAX_SIZE = 15 * 1024 * 1024; // Increased to 15MB for small videos and complex PDFs
   if (file.size > MAX_SIZE) {
-    return 'File size exceeds 10MB limit.';
+    return 'File size exceeds 15MB limit.';
   }
   
   const allowedTypes = [
@@ -38,6 +38,9 @@ export const validateFile = (file: File): string | null => {
     'image/heic', 
     'image/heif',
     'application/pdf',
+    'video/mp4',
+    'video/webm',
+    'video/quicktime',
     'text/plain',
     'text/javascript',
     'text/x-python',
@@ -52,5 +55,5 @@ export const validateFile = (file: File): string | null => {
       return null;
   }
 
-  return 'Unsupported file type. Please upload images, PDFs, or text files.';
+  return 'Unsupported file type. Please upload images, videos (MP4/WebM), PDFs, or text files.';
 };
