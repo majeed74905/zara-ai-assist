@@ -1,6 +1,5 @@
-
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Sparkles, BookOpen, Heart, Code2, Palette, Hammer, WifiOff, Globe, Search, ChevronDown, Brain, Upload, FileText, File, Menu, X } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense, lazy } from 'react';
+import { Sparkles, BookOpen, Heart, Code2, Palette, Hammer, WifiOff, Globe, Search, ChevronDown, Brain, Upload, FileText, File, Menu, X, Loader2 } from 'lucide-react';
 import { Message, Role, Attachment, ViewMode, ChatConfig, PersonalizationConfig, Persona } from './types';
 import { sendMessageToGeminiStream } from './services/gemini';
 import { OfflineService } from './services/offlineService';
@@ -9,38 +8,47 @@ import { MessageItem } from './components/MessageItem';
 import { InputArea } from './components/InputArea';
 import { SettingsModal } from './components/SettingsModal';
 import { Sidebar } from './components/Sidebar';
-import { StudentMode } from './components/StudentMode';
-import { CodeMode } from './components/CodeMode';
-import { LiveMode } from './components/LiveMode';
 import { ChatControls } from './components/ChatControls';
-import { ImageMode } from './components/ImageMode';
-import { ExamMode } from './components/ExamMode';
-import { AnalyticsDashboard } from './components/AnalyticsDashboard';
-import { StudyPlanner } from './components/StudyPlanner';
-import { AboutPage } from './components/AboutPage';
 import { FeedbackModal } from './components/FeedbackModal';
 import { useChatSessions } from './hooks/useChatSessions';
 import { useTheme } from './theme/ThemeContext'; 
 import { useAppMemory } from './hooks/useAppMemory';
 import { useModeThemeSync } from './hooks/useModeThemeSync';
-import { THEMES } from './theme/themes';
-import { ThemeName } from './theme/types';
-import { FlashcardMode } from './components/FlashcardMode';
-import { VideoMode } from './components/VideoMode';
-import { NotesVault } from './components/NotesVault';
-import { AppBuilderMode } from './components/AppBuilderMode';
-import { GithubMode } from './components/GithubMode';
 import { CommandPalette } from './components/CommandPalette';
 import { HomeDashboard } from './components/features/HomeDashboard';
-import { LifeOS } from './components/features/LifeOS';
-import { SkillOS } from './components/features/SkillOS';
-import { MemoryVault } from './components/features/MemoryVault';
-import { CreativeStudio } from './components/features/CreativeStudio';
-import { PricingView } from './components/os/PricingView';
 import { exportChatToMarkdown, exportChatToPDF, exportChatToText } from './utils/exportUtils';
 import { useBackgroundSync } from './hooks/useBackgroundSync';
 
+// Lazy Loaded Components for Performance
+const StudentMode = lazy(() => import('./components/StudentMode').then(m => ({ default: m.StudentMode })));
+const CodeMode = lazy(() => import('./components/CodeMode').then(m => ({ default: m.CodeMode })));
+const LiveMode = lazy(() => import('./components/LiveMode').then(m => ({ default: m.LiveMode })));
+const ImageMode = lazy(() => import('./components/ImageMode').then(m => ({ default: m.ImageMode })));
+const ExamMode = lazy(() => import('./components/ExamMode').then(m => ({ default: m.ExamMode })));
+const AnalyticsDashboard = lazy(() => import('./components/AnalyticsDashboard').then(m => ({ default: m.AnalyticsDashboard })));
+const StudyPlanner = lazy(() => import('./components/StudyPlanner').then(m => ({ default: m.StudyPlanner })));
+const AboutPage = lazy(() => import('./components/AboutPage').then(m => ({ default: m.AboutPage })));
+const FlashcardMode = lazy(() => import('./components/FlashcardMode').then(m => ({ default: m.FlashcardMode })));
+const VideoMode = lazy(() => import('./components/VideoMode').then(m => ({ default: m.VideoMode })));
+const NotesVault = lazy(() => import('./components/NotesVault').then(m => ({ default: m.NotesVault })));
+const AppBuilderMode = lazy(() => import('./components/AppBuilderMode').then(m => ({ default: m.AppBuilderMode })));
+const GithubMode = lazy(() => import('./components/GithubMode').then(m => ({ default: m.GithubMode })));
+const LifeOS = lazy(() => import('./components/features/LifeOS').then(m => ({ default: m.LifeOS })));
+const SkillOS = lazy(() => import('./components/features/SkillOS').then(m => ({ default: m.SkillOS })));
+const MemoryVault = lazy(() => import('./components/features/MemoryVault').then(m => ({ default: m.MemoryVault })));
+const CreativeStudio = lazy(() => import('./components/features/CreativeStudio').then(m => ({ default: m.CreativeStudio })));
+const PricingView = lazy(() => import('./components/os/PricingView').then(m => ({ default: m.PricingView })));
+
 const STORAGE_KEY_PERSONALIZATION = 'zara_personalization';
+
+const LoadingFallback = () => (
+  <div className="flex-1 flex items-center justify-center bg-background">
+    <div className="flex flex-col items-center gap-4">
+      <Loader2 className="w-10 h-10 text-primary animate-spin" />
+      <span className="text-xs font-bold uppercase tracking-widest text-primary animate-pulse">Initializing Component...</span>
+    </div>
+  </div>
+);
 
 const App: React.FC = () => {
   const { lastView, updateView, systemConfig, updateSystemConfig } = useAppMemory();
@@ -192,14 +200,11 @@ const App: React.FC = () => {
       if (currentSessionId) updateSession(currentSessionId, finalMessages); else createSession(finalMessages);
     } catch (error: any) {
       if (abortRef.current) return;
-      
       let errorMessage = "Zara AI is currently unstable. Please try again in a moment.";
       const errorStr = (error?.message || "").toLowerCase();
-      
-      if (errorStr.includes("quota_exceeded") || errorStr.includes("429") || errorStr.includes("resource_exhausted") || errorStr.includes("limit") || errorStr.includes("exceeded")) {
-        errorMessage = "QUOTA EXCEEDED: I've reached the API processing limit for this minute. This usually happens during long conversations. I'll reset automatically in about 30 seconds. Please wait before trying again.";
+      if (errorStr.includes("quota_exceeded") || errorStr.includes("429")) {
+        errorMessage = "QUOTA EXCEEDED: I've reached the API processing limit. Please wait about 30 seconds before trying again.";
       }
-
       setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, isStreaming: false, isError: true, text: errorMessage } : m));
     } finally {
       setIsLoading(false);
@@ -217,7 +222,7 @@ const App: React.FC = () => {
     <button 
       onClick={() => setIsSidebarOpen(true)} 
       className="p-2 -ml-2 text-text hover:bg-surfaceHighlight rounded-lg md:hidden flex-shrink-0"
-      aria-label="Open Navigation"
+      aria-label="Open Navigation Menu"
     >
       <Menu className="w-6 h-6" />
     </button>
@@ -231,7 +236,9 @@ const App: React.FC = () => {
             <span className="ml-2 font-bold text-sm uppercase tracking-widest text-primary truncate">{title}</span>
          </header>
          <div className="flex-1 overflow-hidden">
-            {content}
+            <Suspense fallback={<LoadingFallback />}>
+               {content}
+            </Suspense>
          </div>
       </div>
     );
@@ -278,7 +285,7 @@ const App: React.FC = () => {
                         ? 'bg-[#1a1033] text-purple-400 shadow-lg border border-purple-500/20' 
                         : 'text-text-sub hover:bg-surfaceHighlight hover:text-purple-400'
                     }`}
-                    title="Emotional Support Mode"
+                    aria-label={chatConfig.isEmotionalMode ? "Disable Emotional Support Mode" : "Enable Emotional Support Mode"}
                   >
                     <Heart className={`w-5 h-5 ${chatConfig.isEmotionalMode ? 'fill-current' : ''}`} />
                   </button>
@@ -290,7 +297,7 @@ const App: React.FC = () => {
                         ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.3)]' 
                         : 'text-text-sub hover:bg-surfaceHighlight hover:text-blue-400'
                     }`}
-                    title={chatConfig.useGrounding ? "Disable Google Search" : "Enable Google Search"}
+                    aria-label={chatConfig.useGrounding ? "Disable Google Search" : "Enable Google Search"}
                   >
                     <Globe className={`w-5 h-5 ${chatConfig.useGrounding ? 'fill-current' : ''}`} />
                   </button>
@@ -300,7 +307,7 @@ const App: React.FC = () => {
                        <button 
                          onClick={() => setShowExportMenu(!showExportMenu)} 
                          className={`p-2 rounded-full transition-colors ${showExportMenu ? 'bg-surfaceHighlight text-text' : 'text-text-sub hover:bg-surfaceHighlight'}`}
-                         title="Export Chat"
+                         aria-label="Export Chat Options"
                        >
                           <Upload className="w-5 h-5" />
                        </button>
@@ -331,7 +338,7 @@ const App: React.FC = () => {
                         ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' 
                         : 'text-text-sub hover:bg-surfaceHighlight'
                     }`}
-                    title="Enable Thinking"
+                    aria-label={chatConfig.useThinking ? "Disable Deep Thinking" : "Enable Deep Thinking"}
                   >
                     <Brain className="w-5 h-5" />
                   </button>
@@ -355,7 +362,7 @@ const App: React.FC = () => {
                            </div>
                            
                            <div className="mb-14 animate-slide-up">
-                              <h2 className="text-xl font-medium text-text-sub/60 mb-1">Hello, I'm</h2>
+                              <p className="text-xl font-medium text-text-sub/60 mb-1">Hello, I'm</p>
                               <h1 className="text-7xl font-bold mb-8 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-400 to-white">
                                  Zara Care
                               </h1>
@@ -385,7 +392,7 @@ const App: React.FC = () => {
                            </div>
                            
                            <div className="mb-12 animate-slide-up">
-                              <h2 className="text-xl font-medium text-text-sub mb-1">Hello, I'm</h2>
+                              <p className="text-xl font-medium text-text-sub mb-1">Hello, I'm</p>
                               <h1 className={`text-6xl font-black mb-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-indigo-400`}>
                                  Zara AI
                               </h1>
@@ -403,8 +410,8 @@ const App: React.FC = () => {
                                     <Hammer className="w-6 h-6" />
                                  </div>
                                  <div>
-                                    <h3 className="font-bold text-lg text-text">App Builder</h3>
-                                    <p className="text-[10px] font-black text-text-sub uppercase tracking-[0.2em]">FULL STACK</p>
+                                    <p className="font-bold text-lg text-text">App Builder</p>
+                                    <p className="text-[10px] font-black text-text-sub uppercase tracking-[0.2em]">FULL STACK IDE</p>
                                  </div>
                               </button>
                            </div>
@@ -442,7 +449,7 @@ const App: React.FC = () => {
       />
       <div className="flex-1 flex flex-col h-full relative w-full overflow-hidden">
         {!isOnline && <div className="bg-orange-500 text-white text-[10px] font-black py-1 px-4 text-center z-50 uppercase tracking-widest animate-slide-in-right">OFFLINE MODE</div>}
-        <main className="flex-1 overflow-hidden relative flex flex-col key-transition-wrapper">
+        <main className="flex-1 overflow-hidden relative flex flex-col key-transition-wrapper" id="main-content">
            <div key={currentView} className="h-full w-full animate-fade-in overflow-hidden flex flex-col">
               {currentContent}
            </div>

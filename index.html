@@ -2,16 +2,21 @@
 <html lang="en" class="theme-dark dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
     <!-- Primary Meta Tags -->
     <title>Zara AI - Pro GenAI Workspace & Multi-Modal Assistant</title>
     <meta name="title" content="Zara AI - Pro GenAI Workspace & Multi-Modal Assistant">
-    <meta name="description" content="Zara AI is a professional GenAI workspace powered by Gemini 3.0. Built by Mohammed Majeed, it offers app building, video generation, and real-time voice interaction.">
+    <meta name="description" content="Zara AI is a professional GenAI workspace for app building, real-time voice, and academic mastery. Developed by Mohammed Majeed.">
     <meta name="keywords" content="Zara AI, Google Gemini, AI Assistant, App Builder, AI Tutor, Text to Video, Mohammed Majeed, GenAI Workspace, AI OS, Code Architect">
     <meta name="author" content="Mohammed Majeed">
     <meta name="robots" content="index, follow">
     <meta name="theme-color" content="#8B5CF6">
+    
+    <!-- Resource Hints -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://aistudiocdn.com">
     
     <!-- Canonical Link -->
     <link rel="canonical" href="https://zara-ai-assist.netlify.app/" />
@@ -24,13 +29,13 @@
     <meta property="og:image" content="https://zara-ai-assist.netlify.app/favicon.svg">
 
     <!-- Twitter -->
-    <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="https://zara-ai-assist.netlify.app/">
-    <meta property="twitter:title" content="Zara AI - Pro GenAI Workspace">
-    <meta property="twitter:description" content="Experience the future of AI. Build apps and generate videos with Zara AI's unified multi-modal system.">
-    <meta property="twitter:image" content="https://zara-ai-assist.netlify.app/favicon.svg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://zara-ai-assist.netlify.app/">
+    <meta name="twitter:title" content="Zara AI - Pro GenAI Workspace">
+    <meta name="twitter:description" content="Experience the future of AI. Build apps and generate videos with Zara AI's unified multi-modal system.">
+    <meta name="twitter:image" content="https://zara-ai-assist.netlify.app/favicon.svg">
 
-    <!-- Structured Data (JSON-LD) for Site Name and Application -->
+    <!-- Structured Data -->
     <script type="application/ld+json">
     [
       {
@@ -61,7 +66,7 @@
     <link rel="apple-touch-icon" href="/favicon.svg">
     <link rel="manifest" href="manifest.json">
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -123,43 +128,46 @@
         }
       }
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
     <style>
-      body { background-color: var(--bg-color); color: var(--text-main); }
-      /* Scrollbar Styling */
+      /* Critical CSS */
+      :root {
+        --bg-color: #09090B;
+        --surface-color: #18181B;
+        --text-main: #FAFAFA;
+        --primary: #8B5CF6;
+      }
+      body { background-color: var(--bg-color); color: var(--text-main); font-family: 'Inter', sans-serif; }
       .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--surface-highlight); border-radius: 10px; }
-      .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--primary); }
-      
-      .glass-panel {
-        background: var(--surface);
-        border: 1px solid var(--border-color);
-        backdrop-filter: blur(12px);
-      }
-      
-      .markdown-body pre { background-color: var(--surface-highlight) !important; border-radius: 0.5rem; }
-      .markdown-body code { color: var(--primary); background-color: var(--surface-highlight); padding: 0.2em 0.4em; border-radius: 0.25rem; }
+      .glass-panel { background: var(--surface); border: 1px solid var(--border-color); backdrop-filter: blur(12px); }
     </style>
     <script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
-    "react/": "https://aistudiocdn.com/react@^19.2.1/",
-    "react": "https://aistudiocdn.com/react@^19.2.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "react-markdown": "https://aistudiocdn.com/react-markdown@^10.1.0",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
-    "framer-motion": "https://aistudiocdn.com/framer-motion@^11.1.7",
-    "mermaid": "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "vite": "https://esm.sh/vite@^7.3.0"
-  }
-}
-</script>
+    {
+      "imports": {
+        "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
+        "react/": "https://aistudiocdn.com/react@^19.2.1/",
+        "react": "https://aistudiocdn.com/react@^19.2.1",
+        "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+        "react-markdown": "https://aistudiocdn.com/react-markdown@^10.1.0",
+        "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+        "framer-motion": "https://aistudiocdn.com/framer-motion@^11.1.7",
+        "mermaid": "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs",
+        "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+        "vite": "https://esm.sh/vite@^7.3.0"
+      }
+    }
+    </script>
 </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- LCP Skeleton -->
+      <div style="height: 100vh; display: flex; align-items: center; justify-content: center; background: #09090B;">
+        <div style="width: 48px; height: 48px; border: 4px solid #8B5CF6; border-top-color: transparent; border-radius: 50%; animate: spin 1s linear infinite;"></div>
+      </div>
+    </div>
     <script type="module" src="/index.tsx"></script>
+    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
   </body>
 </html>
