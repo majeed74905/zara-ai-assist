@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Github, Search, BookOpen, Code, Loader2, GitBranch, FileText, Database, Layers, Workflow, Copy, Check, Sparkles, AlertCircle, Download, File, Folder, X, Filter, AlertTriangle, Mic, Play, Pause, Volume2, Radio, MessageSquare, Send, Bot, User as UserIcon } from 'lucide-react';
 import { analyzeGithubRepo, generateSpeech, sendGithubChatStream } from '../services/gemini';
@@ -319,7 +320,13 @@ export const GithubMode: React.FC = () => {
               <label className="text-[10px] font-black text-indigo-400 uppercase mb-3 block tracking-[0.3em] px-2">REPOSITORY URL</label>
               <div className="relative group">
                  <Search className="absolute left-5 top-5 w-6 h-6 text-text-sub group-focus-within:text-white transition-colors" />
-                 <input value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()} placeholder="https://github.com/owner/repo" className="w-full bg-background/50 border border-white/10 rounded-[2rem] pl-16 pr-6 py-5 text-lg focus:border-indigo-500/50 focus:outline-none transition-all font-mono shadow-inner group-hover:border-white/20" />
+                 <input 
+                   value={repoUrl} 
+                   onChange={(e) => setRepoUrl(e.target.value)} 
+                   onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()} 
+                   placeholder="https://github.com/owner/repo" 
+                   className="w-full bg-background/50 border border-white/10 rounded-[2rem] pl-16 pr-6 py-5 text-lg focus:border-indigo-500/50 focus:outline-none transition-all font-mono shadow-inner group-hover:border-white/20 text-text" 
+                 />
               </div>
            </div>
            <button onClick={handleAnalyze} disabled={isLoading || !repoUrl} className="w-full md:w-auto bg-indigo-500 hover:bg-indigo-400 text-white px-12 py-5 rounded-[2rem] font-black text-lg transition-all disabled:opacity-50 flex items-center justify-center gap-4 shadow-2xl shadow-indigo-500/30 active:scale-95 relative z-10">
@@ -372,7 +379,7 @@ export const GithubMode: React.FC = () => {
                            onChange={e => setChatInput(e.target.value)}
                            onKeyDown={e => e.key === 'Enter' && handleSendChat()}
                            placeholder="Ask about specific files, logic, or tech choices..." 
-                           className="w-full bg-background/50 border border-white/10 rounded-2xl pl-6 pr-16 py-4 focus:border-indigo-500 focus:outline-none transition-all text-sm group-hover:border-white/20"
+                           className="w-full bg-background/50 border border-white/10 rounded-2xl pl-6 pr-16 py-4 focus:border-indigo-500 focus:outline-none transition-all text-sm group-hover:border-white/20 text-text"
                          />
                          <button 
                            onClick={handleSendChat}
@@ -403,7 +410,12 @@ export const GithubMode: React.FC = () => {
                 </div>
                 <div className="relative group">
                   <Search className="absolute left-4 top-3 w-4 h-4 text-text-sub group-focus-within:text-white transition-colors" />
-                  <input value={fileSearch} onChange={(e) => setFileSearch(e.target.value)} placeholder="SEARCH NODES..." className="w-full bg-background/50 border border-white/10 rounded-xl pl-11 pr-8 py-3 text-xs text-text focus:border-indigo-500/50 focus:outline-none transition-all placeholder:text-[9px] placeholder:font-black placeholder:tracking-widest" />
+                  <input 
+                    value={fileSearch} 
+                    onChange={(e) => setFileSearch(e.target.value)} 
+                    placeholder="SEARCH NODES..." 
+                    className="w-full bg-background/50 border border-white/10 rounded-xl pl-11 pr-8 py-3 text-xs text-text focus:border-indigo-500/50 focus:outline-none transition-all placeholder:text-[9px] placeholder:font-black placeholder:tracking-widest" 
+                  />
                 </div>
               </div>
               <div className="max-h-[500px] overflow-y-auto custom-scrollbar p-6">
