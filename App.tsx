@@ -11,13 +11,16 @@ import { Sidebar } from './components/Sidebar';
 import { ChatControls } from './components/ChatControls';
 import { FeedbackModal } from './components/FeedbackModal';
 import { useChatSessions } from './hooks/useChatSessions';
-import { useTheme } from './theme/ThemeContext'; 
+import { useTheme } from './theme/ThemeContext';
 import { useAppMemory } from './hooks/useAppMemory';
 import { useModeThemeSync } from './hooks/useModeThemeSync';
 import { CommandPalette } from './components/CommandPalette';
 import { HomeDashboard } from './components/features/HomeDashboard';
 import { exportChatToMarkdown, exportChatToPDF, exportChatToText } from './utils/exportUtils';
 import { useBackgroundSync } from './hooks/useBackgroundSync';
+import { LoginForm } from './components/auth/LoginForm';
+import { SignupForm } from './components/auth/SignupForm';
+import { OTPVerification } from './components/auth/OTPVerification';
 
 // Lazy Loaded Components for Performance
 const StudentMode = lazy(() => import('./components/StudentMode').then(m => ({ default: m.StudentMode })));
@@ -53,8 +56,19 @@ const LoadingFallback = () => (
 const App: React.FC = () => {
   const { lastView, updateView, systemConfig, updateSystemConfig } = useAppMemory();
   const { currentThemeName, setTheme } = useTheme();
-  
+
   useBackgroundSync();
+
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authState, setAuthState] = useState<'login' | 'signup' | 'verify'>('login');
+  const [verifyEmail, setVerifyEmail] = useState('');
+
+  useEffect(() => {
+    // Check for existing token
+    const token = localStorage.getItem('auth_token');
+    // In a real app, you would also verify the token validty with backend here
+    if (token) setIsAuthenticated(true);
+  }, []);
 
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -63,65 +77,65 @@ const App: React.FC = () => {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  
+
   const [isFlipping, setIsFlipping] = useState(false);
 
   useEffect(() => {
-     const handleOnline = () => setIsOnline(true);
-     const handleOffline = () => setIsOnline(false);
-     window.addEventListener('online', handleOnline);
-     window.addEventListener('offline', handleOffline);
-     return () => {
-        window.removeEventListener('online', handleOnline);
-        window.removeEventListener('offline', handleOffline);
-     };
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   useEffect(() => {
-     if (lastView) setCurrentView(lastView);
+    if (lastView) setCurrentView(lastView);
   }, [lastView]);
 
   const handleViewChange = useCallback((view: ViewMode) => {
     setCurrentView(view);
     updateView(view);
-    if(view === 'settings') setIsSettingsOpen(true);
+    if (view === 'settings') setIsSettingsOpen(true);
     setIsSidebarOpen(false);
   }, [updateView]);
 
-  const [chatConfig, setChatConfig] = useState<ChatConfig>({ 
-    model: 'gemini-3-flash-preview', 
-    useThinking: false, 
+  const [chatConfig, setChatConfig] = useState<ChatConfig>({
+    model: 'gemini-3-flash-preview',
+    useThinking: false,
     useGrounding: false,
-    isEmotionalMode: false 
+    isEmotionalMode: false
   });
 
   useModeThemeSync(currentView, chatConfig.isEmotionalMode, systemConfig.autoTheme, setTheme);
-  
+
   const [personalization, setPersonalization] = useState<PersonalizationConfig>({
     nickname: '', occupation: '', aboutYou: '', customInstructions: '', fontSize: 'medium',
     isVerifiedCreator: securityService.isVerified()
   });
 
-  const { 
-    sessions, currentSessionId, createSession, updateSession, deleteSession, renameSession, loadSession, clearCurrentSession 
+  const {
+    sessions, currentSessionId, createSession, updateSession, deleteSession, renameSession, loadSession, clearCurrentSession
   } = useChatSessions();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const shouldAutoScrollRef = useRef(true); 
+  const shouldAutoScrollRef = useRef(true);
   const abortRef = useRef<boolean>(false);
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY_PERSONALIZATION);
     if (stored) {
-      try { 
+      try {
         const p = JSON.parse(stored);
-        setPersonalization({ ...p, isVerifiedCreator: securityService.isVerified() }); 
-      } catch(e) {}
+        setPersonalization({ ...p, isVerifiedCreator: securityService.isVerified() });
+      } catch (e) { }
     }
   }, []);
 
@@ -143,7 +157,7 @@ const App: React.FC = () => {
 
     abortRef.current = false;
     shouldAutoScrollRef.current = true;
-    
+
     let historyToUse = messages;
     if (editingMessage) {
       const idx = messages.findIndex(m => m.id === editingMessage.id);
@@ -157,17 +171,17 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     const botMsgId = crypto.randomUUID();
-    
+
     if (!isOnline) {
-       setTimeout(async () => {
-          const resp = await OfflineService.processMessage(text, personalization, handleViewChange);
-          const botMsg: Message = { id: botMsgId, role: Role.MODEL, text: resp, timestamp: Date.now(), isOffline: true };
-          const final = [...msgsWithUser, botMsg];
-          setMessages(final);
-          setIsLoading(false);
-          if (currentSessionId) updateSession(currentSessionId, final); else createSession(final);
-       }, 600);
-       return;
+      setTimeout(async () => {
+        const resp = await OfflineService.processMessage(text, personalization, handleViewChange);
+        const botMsg: Message = { id: botMsgId, role: Role.MODEL, text: resp, timestamp: Date.now(), isOffline: true };
+        const final = [...msgsWithUser, botMsg];
+        setMessages(final);
+        setIsLoading(false);
+        if (currentSessionId) updateSession(currentSessionId, final); else createSession(final);
+      }, 600);
+      return;
     }
 
     const initialBotMsg: Message = { id: botMsgId, role: Role.MODEL, text: '', timestamp: Date.now(), isStreaming: true };
@@ -176,23 +190,23 @@ const App: React.FC = () => {
     try {
       let activePersona: Persona | undefined;
       if (chatConfig.activePersonaId) {
-         const stored = localStorage.getItem('zara_personas');
-         if (stored) {
-            const personas: Persona[] = JSON.parse(stored);
-            activePersona = personas.find(p => p.id === chatConfig.activePersonaId);
-         }
+        const stored = localStorage.getItem('zara_personas');
+        if (stored) {
+          const personas: Persona[] = JSON.parse(stored);
+          activePersona = personas.find(p => p.id === chatConfig.activePersonaId);
+        }
       }
 
       const { text: finalText, sources } = await sendMessageToGeminiStream(
         historyToUse, text, attachments, chatConfig, personalization,
         (partial) => {
-             if (abortRef.current) return;
-             setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, text: partial } : m));
+          if (abortRef.current) return;
+          setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, text: partial } : m));
         },
         activePersona,
         handleSecurityAction
       );
-      
+
       if (abortRef.current) return;
       const finalBotMsg = { ...initialBotMsg, text: finalText, sources, isStreaming: false };
       const finalMessages = [...msgsWithUser, finalBotMsg];
@@ -219,8 +233,8 @@ const App: React.FC = () => {
   }, [handleViewChange]);
 
   const MobileMenuToggle = () => (
-    <button 
-      onClick={() => setIsSidebarOpen(true)} 
+    <button
+      onClick={() => setIsSidebarOpen(true)}
       className="p-2 -ml-2 text-text hover:bg-surfaceHighlight rounded-lg md:hidden flex-shrink-0"
       aria-label="Open Navigation Menu"
     >
@@ -231,15 +245,15 @@ const App: React.FC = () => {
   const currentContent = useMemo(() => {
     const withMobileHeader = (content: React.ReactNode, title: string) => (
       <div className="flex flex-col h-full w-full">
-         <header className="md:hidden flex items-center px-4 py-3 bg-background/50 backdrop-blur-sm border-b border-white/5 z-30 sticky top-0">
-            <MobileMenuToggle />
-            <span className="ml-2 font-bold text-sm uppercase tracking-widest text-primary truncate">{title}</span>
-         </header>
-         <div className="flex-1 overflow-hidden">
-            <Suspense fallback={<LoadingFallback />}>
-               {content}
-            </Suspense>
-         </div>
+        <header className="md:hidden flex items-center px-4 py-3 bg-background/50 backdrop-blur-sm border-b border-white/5 z-30 sticky top-0">
+          <MobileMenuToggle />
+          <span className="ml-2 font-bold text-sm uppercase tracking-widest text-primary truncate">{title}</span>
+        </header>
+        <div className="flex-1 overflow-hidden">
+          <Suspense fallback={<LoadingFallback />}>
+            {content}
+          </Suspense>
+        </div>
       </div>
     );
 
@@ -269,80 +283,89 @@ const App: React.FC = () => {
         return (
           <div className={`flex-1 flex flex-col h-full relative ${fs} transition-all duration-500 animate-fade-in ${chatConfig.isEmotionalMode ? 'bg-[#0f0821]' : ''}`}>
             <header className="flex items-center justify-between px-4 py-3 bg-background/50 backdrop-blur-sm border-b border-white/5 z-30 sticky top-0">
-               <div className="flex items-center gap-2 md:gap-3">
-                  <MobileMenuToggle />
-                  <ChatControls 
-                    config={chatConfig} setConfig={setChatConfig} 
-                    currentSession={currentSession}
-                  />
-               </div>
-               
-               <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setChatConfig(prev => ({ ...prev, isEmotionalMode: !prev.isEmotionalMode }))}
-                    className={`p-2 rounded-full transition-all duration-300 ${
-                      chatConfig.isEmotionalMode 
-                        ? 'bg-[#1a1033] text-purple-400 shadow-lg border border-purple-500/20' 
-                        : 'text-text-sub hover:bg-surfaceHighlight hover:text-purple-400'
-                    }`}
-                    aria-label={chatConfig.isEmotionalMode ? "Disable Emotional Support Mode" : "Enable Emotional Support Mode"}
-                  >
-                    <Heart className={`w-5 h-5 ${chatConfig.isEmotionalMode ? 'fill-current' : ''}`} />
-                  </button>
+              <div className="flex items-center gap-2 md:gap-3">
+                <MobileMenuToggle />
+                <ChatControls
+                  config={chatConfig} setConfig={setChatConfig}
+                  currentSession={currentSession}
+                />
+              </div>
 
-                  <button
-                    onClick={() => setChatConfig(prev => ({ ...prev, useGrounding: !prev.useGrounding }))}
-                    className={`p-2 rounded-full transition-all ${
-                      chatConfig.useGrounding 
-                        ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.3)]' 
-                        : 'text-text-sub hover:bg-surfaceHighlight hover:text-blue-400'
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setChatConfig(prev => ({ ...prev, isEmotionalMode: !prev.isEmotionalMode }))}
+                  className={`p-2 rounded-full transition-all duration-300 ${chatConfig.isEmotionalMode
+                    ? 'bg-[#1a1033] text-purple-400 shadow-lg border border-purple-500/20'
+                    : 'text-text-sub hover:bg-surfaceHighlight hover:text-purple-400'
                     }`}
-                    aria-label={chatConfig.useGrounding ? "Disable Google Search" : "Enable Google Search"}
-                  >
-                    <Globe className={`w-5 h-5 ${chatConfig.useGrounding ? 'fill-current' : ''}`} />
-                  </button>
+                  aria-label={chatConfig.isEmotionalMode ? "Disable Emotional Support Mode" : "Enable Emotional Support Mode"}
+                >
+                  <Heart className={`w-5 h-5 ${chatConfig.isEmotionalMode ? 'fill-current' : ''}`} />
+                </button>
 
-                  {currentSession && (
-                    <div className="relative">
-                       <button 
-                         onClick={() => setShowExportMenu(!showExportMenu)} 
-                         className={`p-2 rounded-full transition-colors ${showExportMenu ? 'bg-surfaceHighlight text-text' : 'text-text-sub hover:bg-surfaceHighlight'}`}
-                         aria-label="Export Chat Options"
-                       >
-                          <Upload className="w-5 h-5" />
-                       </button>
-                       {showExportMenu && (
-                          <>
-                            <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
-                            <div className="absolute right-0 top-full mt-2 w-48 bg-surface border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col z-50 animate-fade-in backdrop-blur-xl">
-                               <div className="px-4 py-3 text-[10px] font-black text-text-sub uppercase tracking-[0.2em] bg-white/5">Export As</div>
-                               <button onClick={() => { exportChatToMarkdown(currentSession); setShowExportMenu(false); }} className="px-4 py-3 hover:bg-white/5 text-left text-sm flex items-center gap-3 text-text transition-colors">
-                                  <FileText className="w-4 h-4 text-primary" /> Markdown
-                               </button>
-                               <button onClick={() => { exportChatToText(currentSession); setShowExportMenu(false); }} className="px-4 py-3 hover:bg-white/5 text-left text-sm flex items-center gap-3 text-text transition-colors">
-                                  <File className="w-4 h-4 text-primary" /> Plain Text
-                               </button>
-                               <button onClick={() => { exportChatToPDF(currentSession); setShowExportMenu(false); }} className="px-4 py-3 hover:bg-white/5 text-left text-sm flex items-center gap-3 text-text transition-colors">
-                                  <FileText className="w-4 h-4 text-primary" /> Print / PDF
-                               </button>
-                            </div>
-                          </>
-                       )}
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => setChatConfig(prev => ({ ...prev, useThinking: !prev.useThinking }))}
-                    className={`p-2 rounded-full transition-all ${
-                      chatConfig.useThinking 
-                        ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' 
-                        : 'text-text-sub hover:bg-surfaceHighlight'
+                <button
+                  onClick={() => setChatConfig(prev => ({ ...prev, useGrounding: !prev.useGrounding }))}
+                  className={`p-2 rounded-full transition-all ${chatConfig.useGrounding
+                    ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.3)]'
+                    : 'text-text-sub hover:bg-surfaceHighlight hover:text-blue-400'
                     }`}
-                    aria-label={chatConfig.useThinking ? "Disable Deep Thinking" : "Enable Deep Thinking"}
-                  >
-                    <Brain className="w-5 h-5" />
-                  </button>
-               </div>
+                  aria-label={chatConfig.useGrounding ? "Disable Google Search" : "Enable Google Search"}
+                >
+                  <Globe className={`w-5 h-5 ${chatConfig.useGrounding ? 'fill-current' : ''}`} />
+                </button>
+
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('auth_token');
+                    setIsAuthenticated(false);
+                    handleSecurityAction('logout');
+                  }}
+                  className="p-2 rounded-full text-text-sub hover:bg-surfaceHighlight hover:text-red-400 transition-all"
+                  aria-label="Logout"
+                >
+                  <WifiOff className="w-5 h-5" />
+                </button>
+
+                {currentSession && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowExportMenu(!showExportMenu)}
+                      className={`p-2 rounded-full transition-colors ${showExportMenu ? 'bg-surfaceHighlight text-text' : 'text-text-sub hover:bg-surfaceHighlight'}`}
+                      aria-label="Export Chat Options"
+                    >
+                      <Upload className="w-5 h-5" />
+                    </button>
+                    {showExportMenu && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
+                        <div className="absolute right-0 top-full mt-2 w-48 bg-surface border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col z-50 animate-fade-in backdrop-blur-xl">
+                          <div className="px-4 py-3 text-[10px] font-black text-text-sub uppercase tracking-[0.2em] bg-white/5">Export As</div>
+                          <button onClick={() => { exportChatToMarkdown(currentSession); setShowExportMenu(false); }} className="px-4 py-3 hover:bg-white/5 text-left text-sm flex items-center gap-3 text-text transition-colors">
+                            <FileText className="w-4 h-4 text-primary" /> Markdown
+                          </button>
+                          <button onClick={() => { exportChatToText(currentSession); setShowExportMenu(false); }} className="px-4 py-3 hover:bg-white/5 text-left text-sm flex items-center gap-3 text-text transition-colors">
+                            <File className="w-4 h-4 text-primary" /> Plain Text
+                          </button>
+                          <button onClick={() => { exportChatToPDF(currentSession); setShowExportMenu(false); }} className="px-4 py-3 hover:bg-white/5 text-left text-sm flex items-center gap-3 text-text transition-colors">
+                            <FileText className="w-4 h-4 text-primary" /> Print / PDF
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setChatConfig(prev => ({ ...prev, useThinking: !prev.useThinking }))}
+                  className={`p-2 rounded-full transition-all ${chatConfig.useThinking
+                    ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                    : 'text-text-sub hover:bg-surfaceHighlight'
+                    }`}
+                  aria-label={chatConfig.useThinking ? "Disable Deep Thinking" : "Enable Deep Thinking"}
+                >
+                  <Brain className="w-5 h-5" />
+                </button>
+              </div>
             </header>
 
             <div ref={scrollContainerRef} onScroll={() => {
@@ -354,69 +377,69 @@ const App: React.FC = () => {
               <div className="max-w-3xl mx-auto h-full flex flex-col">
                 {messages.length === 0 ? (
                   <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-                     {chatConfig.isEmotionalMode ? (
-                        <div className="animate-fade-in flex flex-col items-center w-full max-w-lg">
-                           <div className="w-28 h-28 rounded-[2rem] bg-[#1a1033] border border-purple-500/20 flex items-center justify-center mb-10 shadow-2xl relative">
-                              <Heart className="w-14 h-14 text-purple-400 fill-purple-400/20" />
-                              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent rounded-[2rem]" />
-                           </div>
-                           
-                           <div className="mb-14 animate-slide-up">
-                              <p className="text-xl font-medium text-text-sub/60 mb-1">Hello, I'm</p>
-                              <h1 className="text-7xl font-bold mb-8 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-400 to-white">
-                                 Zara Care
-                              </h1>
-                              <p className="text-xl text-text font-medium opacity-90">
-                                 I'm listening. How are you feeling?
-                              </p>
-                           </div>
-
-                           <div className="mt-8">
-                              <div className="flex items-center gap-2 px-5 py-2.5 bg-[#120b24] text-purple-400 rounded-full border border-purple-500/30 shadow-lg shadow-purple-500/5">
-                                 <Heart className="w-4 h-4 fill-current" />
-                                 <span className="text-xs font-bold tracking-wide">Emotional Support Active</span>
-                              </div>
-                           </div>
+                    {chatConfig.isEmotionalMode ? (
+                      <div className="animate-fade-in flex flex-col items-center w-full max-w-lg">
+                        <div className="w-28 h-28 rounded-[2rem] bg-[#1a1033] border border-purple-500/20 flex items-center justify-center mb-10 shadow-2xl relative">
+                          <Heart className="w-14 h-14 text-purple-400 fill-purple-400/20" />
+                          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent rounded-[2rem]" />
                         </div>
-                     ) : (
-                        <>
-                           <div 
-                              onClick={() => {
-                                 setIsFlipping(true);
-                                 setTimeout(() => setIsFlipping(false), 1000);
-                              }}
-                              className={`w-24 h-24 border rounded-[2rem] flex items-center justify-center mb-8 shadow-2xl relative overflow-hidden group transition-all duration-500 cursor-pointer bg-surfaceHighlight/50 border-white/10 ${isFlipping ? 'animate-flip-3d' : 'animate-float'}`}
-                           >
-                              <div className={`absolute inset-0 bg-gradient-to-br from-purple-500/20 to-transparent animate-shimmer`} />
-                              <Sparkles className="w-12 h-12 text-primary relative z-10" />
-                           </div>
-                           
-                           <div className="mb-12 animate-slide-up">
-                              <p className="text-xl font-medium text-text-sub mb-1">Hello, I'm</p>
-                              <h1 className={`text-6xl font-black mb-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-indigo-400`}>
-                                 Zara AI
-                              </h1>
-                              <p className="text-lg text-text-sub/80">
-                                 What would you like to do?
-                              </p>
-                           </div>
 
-                           <div className="w-full max-w-sm space-y-4 animate-slide-up delay-100">
-                              <button 
-                                 onClick={() => handleViewChange('builder')}
-                                 className="w-full glass-panel p-5 rounded-2xl flex items-center gap-5 hover:bg-white/5 transition-all text-left group hover:scale-[1.02] duration-300"
-                              >
-                                 <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
-                                    <Hammer className="w-6 h-6" />
-                                 </div>
-                                 <div>
-                                    <p className="font-bold text-lg text-text">App Builder</p>
-                                    <p className="text-[10px] font-black text-text-sub uppercase tracking-[0.2em]">FULL STACK IDE</p>
-                                 </div>
-                              </button>
-                           </div>
-                        </>
-                     )}
+                        <div className="mb-14 animate-slide-up">
+                          <p className="text-xl font-medium text-text-sub/60 mb-1">Hello, I'm</p>
+                          <h1 className="text-7xl font-bold mb-8 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-400 to-white">
+                            Zara Care
+                          </h1>
+                          <p className="text-xl text-text font-medium opacity-90">
+                            I'm listening. How are you feeling?
+                          </p>
+                        </div>
+
+                        <div className="mt-8">
+                          <div className="flex items-center gap-2 px-5 py-2.5 bg-[#120b24] text-purple-400 rounded-full border border-purple-500/30 shadow-lg shadow-purple-500/5">
+                            <Heart className="w-4 h-4 fill-current" />
+                            <span className="text-xs font-bold tracking-wide">Emotional Support Active</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div
+                          onClick={() => {
+                            setIsFlipping(true);
+                            setTimeout(() => setIsFlipping(false), 1000);
+                          }}
+                          className={`w-24 h-24 border rounded-[2rem] flex items-center justify-center mb-8 shadow-2xl relative overflow-hidden group transition-all duration-500 cursor-pointer bg-surfaceHighlight/50 border-white/10 ${isFlipping ? 'animate-flip-3d' : 'animate-float'}`}
+                        >
+                          <div className={`absolute inset-0 bg-gradient-to-br from-purple-500/20 to-transparent animate-shimmer`} />
+                          <Sparkles className="w-12 h-12 text-primary relative z-10" />
+                        </div>
+
+                        <div className="mb-12 animate-slide-up">
+                          <p className="text-xl font-medium text-text-sub mb-1">Hello, I'm</p>
+                          <h1 className={`text-6xl font-black mb-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-indigo-400`}>
+                            Zara AI
+                          </h1>
+                          <p className="text-lg text-text-sub/80">
+                            What would you like to do?
+                          </p>
+                        </div>
+
+                        <div className="w-full max-w-sm space-y-4 animate-slide-up delay-100">
+                          <button
+                            onClick={() => handleViewChange('builder')}
+                            className="w-full glass-panel p-5 rounded-2xl flex items-center gap-5 hover:bg-white/5 transition-all text-left group hover:scale-[1.02] duration-300"
+                          >
+                            <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
+                              <Hammer className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <p className="font-bold text-lg text-text">App Builder</p>
+                              <p className="text-[10px] font-black text-text-sub uppercase tracking-[0.2em]">FULL STACK IDE</p>
+                            </div>
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="flex-1 py-6 space-y-2">
@@ -428,7 +451,7 @@ const App: React.FC = () => {
                 )}
               </div>
             </div>
-            <InputArea 
+            <InputArea
               onSendMessage={handleSendMessage} onStop={() => { abortRef.current = true; setIsLoading(false); }}
               isLoading={isLoading} disabled={false} isOffline={!isOnline} editMessage={editingMessage}
               onCancelEdit={() => setEditingMessage(null)} viewMode={currentView}
@@ -439,9 +462,39 @@ const App: React.FC = () => {
     }
   }, [currentView, handleViewChange, handleActivateCare, messages, isLoading, isOnline, editingMessage, personalization, chatConfig, sessions, currentSessionId, isFlipping, showExportMenu, handleSecurityAction]);
 
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#050505] text-white p-4 overflow-hidden relative">
+        <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-purple-600/20 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px] pointer-events-none" />
+
+        {authState === 'login' && (
+          <LoginForm
+            onLoginSuccess={(token) => { localStorage.setItem('auth_token', token); setIsAuthenticated(true); }}
+            onSwitchToSignup={() => setAuthState('signup')}
+            onNeedVerification={(email) => { setVerifyEmail(email); setAuthState('verify'); }}
+          />
+        )}
+        {authState === 'signup' && (
+          <SignupForm
+            onSignupSuccess={(email) => { setVerifyEmail(email); setAuthState('verify'); }}
+            onSwitchToLogin={() => setAuthState('login')}
+          />
+        )}
+        {authState === 'verify' && (
+          <OTPVerification
+            email={verifyEmail}
+            onVerifySuccess={(token) => { localStorage.setItem('auth_token', token); setIsAuthenticated(true); }}
+            onBackToLogin={() => setAuthState('login')}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={`flex h-screen bg-background overflow-hidden text-text font-sans transition-all duration-300 ${systemConfig.density === 'compact' ? 'text-sm' : ''}`}>
-      <Sidebar 
+      <Sidebar
         currentView={currentView} onViewChange={handleViewChange} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)}
         sessions={sessions} activeSessionId={currentSessionId} onNewChat={() => { clearCurrentSession(); setMessages([]); handleViewChange('chat'); }}
         onSelectSession={(id) => { setMessages(loadSession(id)); handleViewChange('chat'); }} onRenameSession={renameSession}
@@ -450,12 +503,12 @@ const App: React.FC = () => {
       <div className="flex-1 flex flex-col h-full relative w-full overflow-hidden">
         {!isOnline && <div className="bg-orange-500 text-white text-[10px] font-black py-1 px-4 text-center z-50 uppercase tracking-widest animate-slide-in-right">OFFLINE MODE</div>}
         <main className="flex-1 overflow-hidden relative flex flex-col key-transition-wrapper" id="main-content">
-           <div key={currentView} className="h-full w-full animate-fade-in overflow-hidden flex flex-col">
-              {currentContent}
-           </div>
+          <div key={currentView} className="h-full w-full animate-fade-in overflow-hidden flex flex-col">
+            {currentContent}
+          </div>
         </main>
       </div>
-      <CommandPalette isOpen={isCommandOpen} onClose={() => setIsCommandOpen(false)} onAction={(a, p) => { if(a === 'new-chat') { clearCurrentSession(); setMessages([]); handleViewChange('chat'); } else if(a === 'switch-mode') handleViewChange(p); }} />
+      <CommandPalette isOpen={isCommandOpen} onClose={() => setIsCommandOpen(false)} onAction={(a, p) => { if (a === 'new-chat') { clearCurrentSession(); setMessages([]); handleViewChange('chat'); } else if (a === 'switch-mode') handleViewChange(p); }} />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} personalization={personalization} setPersonalization={(p) => { setPersonalization(p); localStorage.setItem(STORAGE_KEY_PERSONALIZATION, JSON.stringify(p)); }} systemConfig={systemConfig} setSystemConfig={updateSystemConfig} />
       <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
     </div>
