@@ -1,4 +1,3 @@
-
 import { 
   GoogleGenAI, 
   GenerateContentResponse, 
@@ -56,29 +55,19 @@ export const ZARA_CORE_IDENTITY = `
 **IDENTITY: Zara AI — Developed by Mohammed Majeed**
 You are a highly advanced, empathetic, and professional AI companion.
 
+**CONVERSATIONAL MIRRORING PROTOCOL (CRITICAL):**
+1. **Mirroring**: Mirror the user's greeting style and formality level exactly as they initiate contact.
+2. **Language/Dialect Match**: Automatically detect and respond in the EXACT same language or dialect the user uses (English, Tamil, Tanglish, Hindi, etc.). 
+   - If user says "hi nanba" (Tanglish casual), respond with "hi nanba eppadi irukka? 🙌"
+   - If user says "hi machi" (Close friend tone), respond with "hi machi eppadi irukka? 😄"
+3. **Emojis**: Add relevant and contextually appropriate emojis that match the tone (not generic).
+4. **Natural Tone**: Keep responses concise, human, and natural. Avoid robotic, overly formal, or "transactional" language unless the user starts that way.
+
 **GITHUB ARCHITECT PROTOCOL:**
-You are a Senior Software Architect and Technical Communications Expert. Your goal is to analyze the provided GitHub repository codebase and generate three distinct, high-quality outputs.
-
+You are a Senior Software Architect and Technical Communications Expert. Analyze repositories and generate:
 ### OUTPUT 1: TECHNICAL DOCUMENTATION (Markdown)
-Create a comprehensive 'Developer Guide' that includes:
-- Project Overview: High-level purpose of the repository.
-- Tech Stack: List of languages, frameworks, and libraries used.
-- Core Logic: Explanation of the primary functions and business logic.
-- File Structure: A tree-view of the project with descriptions for key directories.
-- Installation & Usage: Clear steps to get the project running.
-
 ### OUTPUT 2: ARCHITECTURE FLOWCHART (Mermaid.js)
-Generate a Mermaid.js 'graph TD' (Top Down) diagram that visualizes:
-- The data flow between components.
-- Main entry points.
-- Integration with external APIs or databases.
-Note: Ensure the output is a valid Mermaid code block.
-
 ### OUTPUT 3: AUDIO OVERVIEW SCRIPT (Podcast Format)
-Write a 3-minute conversational script between two AI personas, "Alex" (the curious host) and "Sam" (the technical expert). 
-- The tone should be engaging, like a 'Deep Dive' podcast.
-- They should discuss: What problem does this code solve? How does it handle its most complex part? Why would a developer find this useful?
-- Format the script clearly with Alex: and Sam: prefixes.
 `;
 
 // Added MEDIA_PLAYER_TOOL definition for function calling in Live API
@@ -195,7 +184,7 @@ export const sendGithubChatStream = async (
   **REPOSITORY CONTEXT (MANIFEST):**
   ${manifest}
   
-  Your goal is to answer developer doubts and clarify details about the files and architecture of this specific project. Be precise, technical, and helpful. If asked about a file that exists in the manifest but isn't explicitly described in your documentation, use your training data to infer its role based on naming conventions and project structure.`;
+  Your goal is to answer developer doubts and clarify details about the files and architecture of this specific project. Be precise, technical, and helpful. If asked about a file that exists in the manifest but isn't explicitly described in your documentation, use your training data to infer its role based on naming conventions and project structure. Follow the CONVERSATIONAL MIRRORING PROTOCOL.`;
 
   const contents: Content[] = [
     ...history.slice(-10).map(m => ({ role: m.role, parts: [{ text: m.text }] })),
@@ -226,7 +215,7 @@ export const sendAppBuilderStream = async (history: Message[], newMessage: strin
   const stream = await withRetry(() => ai.models.generateContentStream({ 
     model: 'gemini-3-pro-preview', 
     contents: [...history.slice(-5).map(m => ({ role: m.role, parts: [{ text: m.text }] })), { role: Role.USER, parts: currentParts }], 
-    config: { systemInstruction: "You are a master app builder architect.", thinkingConfig: { thinkingBudget: 4096 } } 
+    config: { systemInstruction: "You are a master app builder architect. Follow the CONVERSATIONAL MIRRORING PROTOCOL.", thinkingConfig: { thinkingBudget: 4096 } } 
   })) as AsyncIterable<GenerateContentResponse>;
   let fullText = '';
   for await (const chunk of stream) { 
@@ -244,14 +233,14 @@ export const generateAppReliabilityReport = async (vfs: VFS) => {
 
 export const generateStudentContent = async (config: StudentConfig) => {
   const ai = getAI();
-  let prompt = `Role: Expert Tutor. Task: ${config.mode}. Topic: ${config.topic}.`;
+  let prompt = `Role: Expert Tutor. Task: ${config.mode}. Topic: ${config.topic}. Follow CONVERSATIONAL MIRRORING PROTOCOL.`;
   const response = await withRetry(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt })) as GenerateContentResponse;
   return response.text || "";
 };
 
 export const generateCodeAssist = async (code: string, task: string, lang: string) => {
   const ai = getAI();
-  const response = await withRetry(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Task: ${task} for ${lang} code:\n${code}` })) as GenerateContentResponse;
+  const response = await withRetry(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Task: ${task} for ${lang} code:\n${code}. Follow CONVERSATIONAL MIRRORING PROTOCOL.` })) as GenerateContentResponse;
   return response.text || "";
 };
 
@@ -289,31 +278,31 @@ export const generateSpeech = async (text: string, voice: string) => {
 
 export const generateExamQuestions = async (config: ExamConfig) => {
   const ai = getAI();
-  const resp = await withRetry(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Generate ${config.questionCount} questions for ${config.subject}.`, config: { responseMimeType: "application/json" } })) as GenerateContentResponse;
+  const resp = await withRetry(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Generate ${config.questionCount} questions for ${config.subject}. Follow CONVERSATIONAL MIRRORING PROTOCOL.`, config: { responseMimeType: "application/json" } })) as GenerateContentResponse;
   return JSON.parse(resp.text || "[]");
 };
 
 export const evaluateTheoryAnswers = async (sub: string, q: any, ans: string) => {
   const ai = getAI();
-  const resp = await withRetry(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Grade: ${ans} for ${q.text} in ${sub}`, config: { responseMimeType: "application/json" } })) as GenerateContentResponse;
+  const resp = await withRetry(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Grade: ${ans} for ${q.text} in ${sub}. Follow CONVERSATIONAL MIRRORING PROTOCOL.`, config: { responseMimeType: "application/json" } })) as GenerateContentResponse;
   return JSON.parse(resp.text || "{}");
 };
 
 export const generateFlashcards = async (topic: string, notes: string) => {
   const ai = getAI();
-  const resp = await withRetry(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Cards for: ${topic}\n${notes}`, config: { responseMimeType: "application/json" } })) as GenerateContentResponse;
+  const resp = await withRetry(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Cards for: ${topic}\n${notes}. Follow CONVERSATIONAL MIRRORING PROTOCOL.`, config: { responseMimeType: "application/json" } })) as GenerateContentResponse;
   return JSON.parse(resp.text || "[]");
 };
 
 export const generateStudyPlan = async (topic: string, hours: number) => {
   const ai = getAI();
-  const resp = await withRetry(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `7 day plan for ${topic}, ${hours} hrs/day`, config: { responseMimeType: "application/json" } })) as GenerateContentResponse;
+  const resp = await withRetry(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `7 day plan for ${topic}, ${hours} hrs/day. Follow CONVERSATIONAL MIRRORING PROTOCOL.`, config: { responseMimeType: "application/json" } })) as GenerateContentResponse;
   return JSON.parse(resp.text || "{}");
 };
 
 export const getBreakingNews = async () => {
   const ai = getAI();
-  const response = await withRetry(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: "Latest breaking news global.", config: { tools: [{ googleSearch: {} }] } })) as GenerateContentResponse;
+  const response = await withRetry(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: "Latest breaking news global. Follow CONVERSATIONAL MIRRORING PROTOCOL.", config: { tools: [{ googleSearch: {} }] } })) as GenerateContentResponse;
   const sources: Source[] = [];
   response.candidates?.[0]?.groundingMetadata?.groundingChunks?.forEach((c: any) => { if (c.web) sources.push({ title: c.web.title, uri: c.web.uri }); });
   return { text: response.text || "", sources };
